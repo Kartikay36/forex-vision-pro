@@ -4,7 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Fullscreen, TrendingUp, TrendingDown, Clock, AlertCircle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Fullscreen, TrendingUp, TrendingDown, Clock, AlertCircle, Sun, Moon } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 import LiveChart from './LiveChart';
 import PredictionChart from './PredictionChart';
 import SignalPanel from './SignalPanel';
@@ -20,6 +22,7 @@ const TradingDashboard = () => {
   const [selectedTimeframe, setSelectedTimeframe] = useState('1H');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTab, setCurrentTab] = useState('live');
+  const { theme, toggleTheme } = useTheme();
 
   const { forexData, isLoading, lastUpdate } = useForexData(selectedPair, selectedTimeframe);
   const { isMarketOpen, nextMarketEvent, marketSessions } = useMarketHours();
@@ -44,13 +47,13 @@ const TradingDashboard = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="border-b border-slate-700 bg-slate-900/50 backdrop-blur-sm">
+      <div className="border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-white">Forex Trading Pro</h1>
+              <h1 className="text-2xl font-bold text-foreground">Forex Trading Pro</h1>
               <Badge variant={isMarketOpen ? "default" : "secondary"} className="text-xs">
                 {isMarketOpen ? "Market Open" : "Market Closed"}
               </Badge>
@@ -61,11 +64,21 @@ const TradingDashboard = () => {
                 nextEvent={nextMarketEvent}
                 sessions={marketSessions}
               />
+              
+              {/* Theme Toggle */}
+              <div className="flex items-center space-x-2">
+                <Sun className="h-4 w-4" />
+                <Switch
+                  checked={theme === 'dark'}
+                  onCheckedChange={toggleTheme}
+                />
+                <Moon className="h-4 w-4" />
+              </div>
+              
               <Button
                 variant="outline"
                 size="sm"
                 onClick={toggleFullscreen}
-                className="text-white border-slate-600 hover:bg-slate-700"
               >
                 <Fullscreen className="h-4 w-4" />
               </Button>
@@ -75,46 +88,28 @@ const TradingDashboard = () => {
       </div>
 
       <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left Sidebar - Controls */}
-          <div className="lg:col-span-1 space-y-4">
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+          {/* Left Sidebar - Currency Pairs */}
+          <div className="xl:col-span-1">
             <CurrencyPairSelector 
               selectedPair={selectedPair}
               onPairChange={setSelectedPair}
               forexData={forexData}
             />
-            
-            <TimeframeSelector
-              selectedTimeframe={selectedTimeframe}
-              onTimeframeChange={setSelectedTimeframe}
-            />
-
-            <TechnicalIndicators
-              data={forexData}
-              pair={selectedPair}
-              timeframe={selectedTimeframe}
-            />
-
-            <SignalPanel
-              pair={selectedPair}
-              timeframe={selectedTimeframe}
-              data={forexData}
-              isMarketOpen={isMarketOpen}
-            />
           </div>
 
           {/* Main Content - Charts */}
-          <div className="lg:col-span-3">
-            <Card className="bg-slate-800/50 border-slate-700">
+          <div className="xl:col-span-3">
+            <Card className="bg-card border-border">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-white flex items-center space-x-2">
+                  <CardTitle className="text-foreground flex items-center space-x-2">
                     <span>{selectedPair}</span>
                     <Badge variant="outline" className="text-xs">
                       {selectedTimeframe}
                     </Badge>
                   </CardTitle>
-                  <div className="flex items-center space-x-2 text-sm text-slate-400">
+                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                     <Clock className="h-4 w-4" />
                     <span>Last update: {lastUpdate}</span>
                   </div>
@@ -123,16 +118,16 @@ const TradingDashboard = () => {
               
               <CardContent className="p-0">
                 <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-                  <TabsList className="grid w-full grid-cols-2 bg-slate-700/50">
+                  <TabsList className="grid w-full grid-cols-2 bg-muted">
                     <TabsTrigger 
                       value="live" 
-                      className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                      className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                     >
                       Live Chart
                     </TabsTrigger>
                     <TabsTrigger 
                       value="prediction"
-                      className="data-[state=active]:bg-purple-600 data-[state=active]:text-white"
+                      className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                     >
                       AI Prediction
                     </TabsTrigger>
@@ -168,9 +163,9 @@ const TradingDashboard = () => {
 
             {/* Quick Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-              <Card className="bg-slate-800/50 border-slate-700">
+              <Card className="bg-card border-border">
                 <CardContent className="p-4">
-                  <div className="text-sm text-slate-400">24h Change</div>
+                  <div className="text-sm text-muted-foreground">24h Change</div>
                   <div className="text-lg font-semibold text-green-500 flex items-center">
                     <TrendingUp className="h-4 w-4 mr-1" />
                     +0.34%
@@ -178,23 +173,23 @@ const TradingDashboard = () => {
                 </CardContent>
               </Card>
               
-              <Card className="bg-slate-800/50 border-slate-700">
+              <Card className="bg-card border-border">
                 <CardContent className="p-4">
-                  <div className="text-sm text-slate-400">24h High</div>
-                  <div className="text-lg font-semibold text-white">1.0892</div>
+                  <div className="text-sm text-muted-foreground">24h High</div>
+                  <div className="text-lg font-semibold text-foreground">1.0892</div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-slate-800/50 border-slate-700">
+              <Card className="bg-card border-border">
                 <CardContent className="p-4">
-                  <div className="text-sm text-slate-400">24h Low</div>
-                  <div className="text-lg font-semibold text-white">1.0845</div>
+                  <div className="text-sm text-muted-foreground">24h Low</div>
+                  <div className="text-lg font-semibold text-foreground">1.0845</div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-slate-800/50 border-slate-700">
+              <Card className="bg-card border-border">
                 <CardContent className="p-4">
-                  <div className="text-sm text-slate-400">Volatility</div>
+                  <div className="text-sm text-muted-foreground">Volatility</div>
                   <div className="text-lg font-semibold text-yellow-500 flex items-center">
                     <AlertCircle className="h-4 w-4 mr-1" />
                     Medium
@@ -202,6 +197,27 @@ const TradingDashboard = () => {
                 </CardContent>
               </Card>
             </div>
+          </div>
+
+          {/* Right Sidebar - Controls & Analysis */}
+          <div className="xl:col-span-1 space-y-4">
+            <TimeframeSelector
+              selectedTimeframe={selectedTimeframe}
+              onTimeframeChange={setSelectedTimeframe}
+            />
+
+            <TechnicalIndicators
+              data={forexData}
+              pair={selectedPair}
+              timeframe={selectedTimeframe}
+            />
+
+            <SignalPanel
+              pair={selectedPair}
+              timeframe={selectedTimeframe}
+              data={forexData}
+              isMarketOpen={isMarketOpen}
+            />
           </div>
         </div>
       </div>

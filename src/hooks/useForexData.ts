@@ -31,13 +31,37 @@ export const useForexData = (pair: string, timeframe: string) => {
 };
 
 const generateRealisticData = (pair: string, timeframe: string) => {
-  const basePrice = pair.includes('JPY') ? 150.25 : 1.0850;
+  // Different base prices for different currency pairs
+  const basePrices: { [key: string]: number } = {
+    'EUR/USD': 1.0850,
+    'GBP/USD': 1.2734,
+    'USD/JPY': 150.25,
+    'AUD/USD': 0.6523,
+    'USD/CAD': 1.3675,
+    'USD/CHF': 0.8923,
+    'NZD/USD': 0.5987,
+    'EUR/GBP': 0.8523,
+  };
+
+  const basePrice = basePrices[pair] || 1.0000;
   const points = getPointsForTimeframe(timeframe);
   const data = [];
   
   for (let i = 0; i < points; i++) {
     const time = new Date(Date.now() - (points - i) * getIntervalMs(timeframe));
-    const volatility = pair.includes('GBP') ? 0.003 : 0.002;
+    
+    // Different volatility patterns for different pairs
+    let volatility = 0.002;
+    if (pair.includes('GBP') || pair.includes('AUD') || pair.includes('NZD')) {
+      volatility = 0.003; // Higher volatility for these pairs
+    }
+    if (pair.includes('CHF') || pair.includes('CAD')) {
+      volatility = 0.0015; // Lower volatility for these pairs
+    }
+    if (pair.includes('JPY')) {
+      volatility = 0.5; // Different scale for JPY pairs
+    }
+    
     const trend = Math.sin(i / 20) * volatility;
     const noise = (Math.random() - 0.5) * volatility;
     const price = basePrice + trend + noise;

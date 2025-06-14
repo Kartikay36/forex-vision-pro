@@ -21,13 +21,13 @@ const TimeframeSelector: React.FC<TimeframeSelectorProps> = ({
     { value: '4H', label: '4 Hour', description: 'Swing' },
     { value: '1D', label: '1 Day', description: 'Position' },
     { value: '1W', label: '1 Week', description: 'Long-term' },
-    { value: '1M', label: '1 Month', description: 'Investment' }
+    { value: '1MO', label: '1 Month', description: 'Investment' }
   ];
 
   return (
-    <Card className="bg-slate-800/50 border-slate-700">
+    <Card className="bg-card border-border">
       <CardHeader className="pb-3">
-        <CardTitle className="text-white flex items-center space-x-2">
+        <CardTitle className="text-foreground flex items-center space-x-2">
           <Clock className="h-5 w-5" />
           <span>Timeframe</span>
         </CardTitle>
@@ -42,15 +42,15 @@ const TimeframeSelector: React.FC<TimeframeSelectorProps> = ({
               size="sm"
               className={`flex flex-col items-center p-3 h-auto ${
                 selectedTimeframe === tf.value 
-                  ? "bg-blue-600 hover:bg-blue-700" 
-                  : "border-slate-600 hover:bg-slate-700"
+                  ? "bg-primary text-primary-foreground hover:bg-primary/90" 
+                  : "border-border hover:bg-accent hover:text-accent-foreground"
               }`}
               onClick={() => onTimeframeChange(tf.value)}
             >
-              <div className="font-semibold text-white">
+              <div className="font-semibold">
                 {tf.label}
               </div>
-              <div className="text-xs text-slate-300 mt-1">
+              <div className="text-xs text-muted-foreground mt-1">
                 {tf.description}
               </div>
             </Button>
@@ -58,12 +58,12 @@ const TimeframeSelector: React.FC<TimeframeSelectorProps> = ({
         </div>
         
         {/* Timeframe Info */}
-        <div className="mt-4 p-3 bg-slate-700/50 rounded-lg">
-          <div className="text-xs text-slate-400 mb-1">Selected Timeframe</div>
-          <div className="text-white font-medium">
+        <div className="mt-4 p-3 bg-muted rounded-lg">
+          <div className="text-xs text-muted-foreground mb-1">Selected Timeframe</div>
+          <div className="text-foreground font-medium">
             {timeframes.find(tf => tf.value === selectedTimeframe)?.label || selectedTimeframe}
           </div>
-          <div className="text-xs text-slate-300 mt-1">
+          <div className="text-xs text-muted-foreground mt-1">
             Best for: {timeframes.find(tf => tf.value === selectedTimeframe)?.description}
           </div>
         </div>
