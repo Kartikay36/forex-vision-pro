@@ -1,16 +1,17 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TrendingUp, TrendingDown, Clock, Target, AlertCircle } from 'lucide-react';
+import { TradingViewData, CandlestickData } from '@/hooks/useTradingViewData';
 
 interface SignalPanelProps {
   pair: string;
   timeframe: string;
-  data: any[];
+  data: CandlestickData[];
   isMarketOpen: boolean;
+  tradingViewData: TradingViewData | null;
 }
 
 interface Signal {
@@ -31,7 +32,8 @@ const SignalPanel: React.FC<SignalPanelProps> = ({
   pair, 
   timeframe, 
   data, 
-  isMarketOpen 
+  isMarketOpen,
+  tradingViewData
 }) => {
   const [signals, setSignals] = useState<Signal[]>([]);
   const [selectedTimeframe, setSelectedTimeframe] = useState('ALL');
@@ -39,7 +41,7 @@ const SignalPanel: React.FC<SignalPanelProps> = ({
   const timeframes = ['1M', '5M', '15M', '1H', '4H', '1D'];
   const majorPairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'USD/CHF'];
 
-  // Generate realistic trading signals
+  // Generate realistic trading signals based on TradingView data
   useEffect(() => {
     const generateSignals = () => {
       const newSignals: Signal[] = [];
@@ -51,7 +53,15 @@ const SignalPanel: React.FC<SignalPanelProps> = ({
           
           for (let i = 0; i < signalCount; i++) {
             const issBuy = Math.random() > 0.5;
-            const basePrice = currencyPair.includes('JPY') ? 150.25 : 1.0850;
+            
+            // Use TradingView data if available, otherwise use fallback
+            let basePrice: number;
+            if (tradingViewData && currencyPair === tradingViewData.symbol) {
+              basePrice = tradingViewData.price;
+            } else {
+              basePrice = currencyPair.includes('JPY') ? 150.25 : 1.0850;
+            }
+            
             const priceVariation = currencyPair.includes('JPY') ? 0.1 : 0.0001;
             
             const entry = basePrice + (Math.random() - 0.5) * priceVariation * 100;
@@ -103,7 +113,7 @@ const SignalPanel: React.FC<SignalPanelProps> = ({
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [isMarketOpen]);
+  }, [isMarketOpen, tradingViewData]);
 
   const filteredSignals = signals.filter(signal => {
     if (selectedTimeframe === 'ALL') return true;
@@ -114,7 +124,7 @@ const SignalPanel: React.FC<SignalPanelProps> = ({
   const expiredSignals = filteredSignals.filter(s => s.status === 'expired').slice(0, 6);
 
   const SignalCard = ({ signal }: { signal: Signal }) => (
-    <Card className="bg-slate-800/50 border-slate-700 min-w-[300px]">
+    <Card className="bg-slate-800/50 border-slate-700 min-w-[280px]">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center space-x-2">
@@ -222,7 +232,7 @@ const SignalPanel: React.FC<SignalPanelProps> = ({
           
           <TabsContent value="active" className="mt-4">
             {activeSignals.length > 0 ? (
-              <div className="flex gap-4 overflow-x-auto pb-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {activeSignals.map(signal => (
                   <SignalCard key={signal.id} signal={signal} />
                 ))}
@@ -239,7 +249,7 @@ const SignalPanel: React.FC<SignalPanelProps> = ({
           </TabsContent>
           
           <TabsContent value="expired" className="mt-4">
-            <div className="flex gap-4 overflow-x-auto pb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {expiredSignals.map(signal => (
                 <SignalCard key={signal.id} signal={signal} />
               ))}

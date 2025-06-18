@@ -5,35 +5,41 @@ import { Badge } from '@/components/ui/badge';
 import { Brain, TrendingUp, TrendingDown, AlertTriangle, Target, BarChart } from 'lucide-react';
 import { AIForecastEngine } from '@/utils/aiPredictionEngine';
 import { useRealForexData } from '@/hooks/useRealForexData';
+import { TradingViewData, CandlestickData } from '@/hooks/useTradingViewData';
 
 interface PredictionChartProps {
   pair: string;
   timeframe: string;
   isLoading: boolean;
   height: number;
+  tradingViewData: TradingViewData | null;
+  historicalData: CandlestickData[];
 }
 
 const PredictionChart: React.FC<PredictionChartProps> = ({ 
   pair, 
   timeframe, 
   isLoading, 
-  height 
+  height,
+  tradingViewData,
+  historicalData
 }) => {
   const { forexData } = useRealForexData(pair, timeframe);
 
   const { predictionData, aiAnalysis, mlPrediction, patterns } = useMemo(() => {
-    if (forexData.length === 0) return { predictionData: [], aiAnalysis: null, mlPrediction: null, patterns: [] };
+    const dataToUse = historicalData.length > 0 ? historicalData : forexData;
+    if (dataToUse.length === 0) return { predictionData: [], aiAnalysis: null, mlPrediction: null, patterns: [] };
 
-    const aiEngine = new AIForecastEngine(pair, forexData);
+    const aiEngine = new AIForecastEngine(pair, dataToUse);
     const prediction = aiEngine.generateMLPrediction(24);
     const detectedPatterns = aiEngine.detectTechnicalPatterns();
     
     // Generate prediction timeline
-    const historicalPoints = forexData.slice(-30);
+    const historicalPoints = dataToUse.slice(-30);
     const predictionPoints = 20;
     const combinedData = [...historicalPoints];
     
-    let currentPrice = forexData[forexData.length - 1].close;
+    let currentPrice = tradingViewData?.price || dataToUse[dataToUse.length - 1].close;
     
     // Generate AI prediction scenarios
     for (let i = 1; i <= predictionPoints; i++) {
@@ -101,7 +107,7 @@ const PredictionChart: React.FC<PredictionChartProps> = ({
       mlPrediction: prediction,
       patterns: detectedPatterns
     };
-  }, [forexData, pair, timeframe]);
+  }, [forexData, pair, timeframe, tradingViewData, historicalData]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
