@@ -1,12 +1,13 @@
 
 import React, { useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, ComposedChart, Bar } from 'recharts';
+import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Bar } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Brain, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { Brain, TrendingUp, TrendingDown, AlertTriangle, Target, BarChart } from 'lucide-react';
+import { AIForecastEngine } from '@/utils/aiPredictionEngine';
+import { useRealForexData } from '@/hooks/useRealForexData';
 
 interface PredictionChartProps {
-  data: any[];
   pair: string;
   timeframe: string;
   isLoading: boolean;
@@ -14,106 +15,100 @@ interface PredictionChartProps {
 }
 
 const PredictionChart: React.FC<PredictionChartProps> = ({ 
-  data, 
   pair, 
   timeframe, 
   isLoading, 
   height 
 }) => {
-  const { predictionData, aiAnalysis, confidenceScore } = useMemo(() => {
-    // Generate sophisticated AI prediction data
-    const currentPrice = 1.0850;
-    const historicalPoints = 50;
+  const { forexData } = useRealForexData(pair, timeframe);
+
+  const { predictionData, aiAnalysis, mlPrediction, patterns } = useMemo(() => {
+    if (forexData.length === 0) return { predictionData: [], aiAnalysis: null, mlPrediction: null, patterns: [] };
+
+    const aiEngine = new AIForecastEngine(pair, forexData);
+    const prediction = aiEngine.generateMLPrediction(24);
+    const detectedPatterns = aiEngine.detectTechnicalPatterns();
+    
+    // Generate prediction timeline
+    const historicalPoints = forexData.slice(-30);
     const predictionPoints = 20;
-    const totalPoints = historicalPoints + predictionPoints;
+    const combinedData = [...historicalPoints];
     
-    const generatedData = [];
-    let price = currentPrice;
+    let currentPrice = forexData[forexData.length - 1].close;
     
-    // Historical data with realistic patterns
-    for (let i = 0; i < historicalPoints; i++) {
-      const time = new Date(Date.now() - (historicalPoints - i) * 3600000);
-      const trend = Math.sin(i / 10) * 0.01;
-      const noise = (Math.random() - 0.5) * 0.002;
-      price = currentPrice + trend + noise;
+    // Generate AI prediction scenarios
+    for (let i = 1; i <= predictionPoints; i++) {
+      const time = new Date(Date.now() + i * 300000); // 5 min intervals
       
-      generatedData.push({
+      // Main AI prediction with confidence decay
+      const confidenceDecay = Math.max(0.2, prediction.confidence - (i * 0.03));
+      const priceDirection = prediction.direction === 'up' ? 1 : -1;
+      const volatility = pair.includes('JPY') ? 0.3 : 0.002;
+      
+      const aiPrice = currentPrice + (priceDirection * volatility * i * 0.1) + (Math.random() - 0.5) * volatility * 0.5;
+      
+      // Bullish scenario (optimistic)
+      const bullishPrice = currentPrice + (volatility * i * 0.15) + Math.random() * volatility * 0.3;
+      
+      // Bearish scenario (pessimistic)
+      const bearishPrice = currentPrice - (volatility * i * 0.15) - Math.random() * volatility * 0.3;
+      
+      // Support and resistance levels
+      const supportLevel = currentPrice * 0.995;
+      const resistanceLevel = currentPrice * 1.005;
+      
+      combinedData.push({
         time: time.toLocaleTimeString(),
-        actualPrice: price,
         timestamp: time.getTime(),
-        type: 'historical',
-        volume: Math.random() * 1000000 + 500000,
-        rsi: 30 + Math.random() * 40,
-        macd: (Math.random() - 0.5) * 0.001,
-        bollinger: {
-          upper: price + 0.003,
-          lower: price - 0.003,
-          middle: price
-        }
-      });
-    }
-    
-    // AI Prediction data with multiple scenarios
-    let predictionPrice = price;
-    for (let i = 0; i < predictionPoints; i++) {
-      const time = new Date(Date.now() + i * 3600000);
-      
-      // Bullish scenario
-      const bullishTrend = 0.0001 * (i + 1);
-      const bullishPrice = predictionPrice + bullishTrend + (Math.random() - 0.3) * 0.001;
-      
-      // Bearish scenario
-      const bearishTrend = -0.0001 * (i + 1);
-      const bearishPrice = predictionPrice + bearishTrend + (Math.random() - 0.7) * 0.001;
-      
-      // Most likely scenario (AI prediction)
-      const aiWeight = 0.6;
-      const marketSentiment = Math.sin(i / 5) * 0.0005;
-      const aiPrediction = predictionPrice + marketSentiment + (Math.random() - 0.5) * 0.0005;
-      
-      generatedData.push({
-        time: time.toLocaleTimeString(),
-        aiPrediction: aiPrediction,
+        aiPrediction: aiPrice,
         bullishScenario: bullishPrice,
         bearishScenario: bearishPrice,
-        confidenceBand: Math.max(0.1, 0.8 - (i * 0.03)), // Decreasing confidence over time
-        timestamp: time.getTime(),
+        confidenceBand: confidenceDecay,
+        supportLevel,
+        resistanceLevel,
         type: 'prediction',
-        volume: Math.random() * 800000 + 400000,
-        rsi: 45 + Math.random() * 20,
-        macd: (Math.random() - 0.5) * 0.0008
+        volume: 400000 + Math.random() * 600000,
+        
+        // Candlestick data for prediction
+        open: aiPrice - volatility * 0.1,
+        high: aiPrice + volatility * 0.2,
+        low: aiPrice - volatility * 0.2,
+        close: aiPrice
       });
       
-      predictionPrice = aiPrediction;
+      currentPrice = aiPrice;
     }
     
-    // AI Analysis
     const analysis = {
-      direction: Math.random() > 0.5 ? 'bullish' : 'bearish',
-      strength: Math.random() * 100,
+      direction: prediction.direction === 'up' ? 'bullish' : 'bearish',
+      strength: prediction.confidence * 100,
+      confidence: prediction.confidence,
       timeHorizon: '4-6 hours',
+      targetPrice: prediction.price,
+      probability: prediction.probability,
       keyFactors: [
-        'Technical momentum indicators',
-        'Market sentiment analysis',
-        'Volume profile analysis',
-        'Support/resistance levels'
+        'ML Pattern Recognition',
+        'Real-time Sentiment Analysis',
+        'Volume Profile Analysis',
+        'Multi-timeframe Confluence',
+        'Market Microstructure'
       ],
-      riskLevel: Math.random() > 0.7 ? 'high' : Math.random() > 0.4 ? 'medium' : 'low'
+      riskLevel: prediction.confidence > 0.7 ? 'medium' : prediction.confidence > 0.5 ? 'high' : 'very-high'
     };
-    
-    const confidence = Math.floor(65 + Math.random() * 25); // 65-90%
     
     return {
-      predictionData: generatedData,
+      predictionData: combinedData,
       aiAnalysis: analysis,
-      confidenceScore: confidence
+      mlPrediction: prediction,
+      patterns: detectedPatterns
     };
-  }, [pair, timeframe]);
+  }, [forexData, pair, timeframe]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       const isPrediction = data.type === 'prediction';
+      const formatPrice = (price: number) => pair.includes('JPY') ? price.toFixed(3) : price.toFixed(5);
       
       return (
         <div className="bg-slate-800 border border-slate-600 rounded-lg p-3 shadow-lg">
@@ -123,13 +118,21 @@ const PredictionChart: React.FC<PredictionChartProps> = ({
           </p>
           {payload.map((entry: any, index: number) => (
             <p key={index} style={{ color: entry.color }}>
-              {entry.name}: {entry.value?.toFixed(5)}
+              {entry.name}: {formatPrice(entry.value)}
             </p>
           ))}
           {isPrediction && (
-            <p className="text-purple-400 text-sm">
-              Confidence: {(data.confidenceBand * 100).toFixed(0)}%
-            </p>
+            <>
+              <p className="text-purple-400 text-sm">
+                Confidence: {(data.confidenceBand * 100).toFixed(0)}%
+              </p>
+              <p className="text-blue-400 text-sm">
+                Support: {formatPrice(data.supportLevel)}
+              </p>
+              <p className="text-red-400 text-sm">
+                Resistance: {formatPrice(data.resistanceLevel)}
+              </p>
+            </>
           )}
         </div>
       );
@@ -137,7 +140,7 @@ const PredictionChart: React.FC<PredictionChartProps> = ({
     return null;
   };
 
-  if (isLoading) {
+  if (isLoading || !aiAnalysis) {
     return (
       <div className="flex items-center justify-center h-96 bg-slate-900/50 rounded-lg">
         <div className="flex items-center space-x-2 text-slate-400">
@@ -150,13 +153,13 @@ const PredictionChart: React.FC<PredictionChartProps> = ({
 
   return (
     <div className="relative">
-      {/* AI Analysis Header */}
-      <div className="absolute top-4 left-4 z-10 bg-slate-900/80 rounded-lg p-3 backdrop-blur-sm">
+      {/* Enhanced AI Analysis Header */}
+      <div className="absolute top-4 left-4 z-10 bg-slate-900/90 rounded-lg p-3 backdrop-blur-sm border border-slate-600">
         <div className="flex items-center space-x-3">
           <Brain className="h-6 w-6 text-purple-400" />
           <div>
             <div className="text-white font-semibold flex items-center space-x-2">
-              <span>AI Prediction</span>
+              <span>AI Forecast</span>
               <Badge 
                 variant={aiAnalysis.direction === 'bullish' ? 'default' : 'destructive'}
                 className="text-xs"
@@ -168,25 +171,41 @@ const PredictionChart: React.FC<PredictionChartProps> = ({
                 )}
               </Badge>
             </div>
-            <div className="text-sm text-slate-300">
-              Confidence: {confidenceScore}% | {aiAnalysis.timeHorizon}
+            <div className="text-sm text-slate-300 flex items-center space-x-2">
+              <Target className="h-3 w-3" />
+              <span>Target: {pair.includes('JPY') ? mlPrediction?.price.toFixed(3) : mlPrediction?.price.toFixed(5)}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Risk Warning */}
-      <div className="absolute top-4 right-4 z-10 bg-yellow-900/80 rounded-lg p-2 backdrop-blur-sm">
+      {/* Pattern Recognition Results */}
+      <div className="absolute top-4 right-4 z-10 bg-blue-900/80 rounded-lg p-2 backdrop-blur-sm">
+        <div className="text-blue-300 text-xs space-y-1">
+          <div className="flex items-center space-x-1">
+            <BarChart className="h-3 w-3" />
+            <span>Patterns: {patterns.length}</span>
+          </div>
+          {patterns.slice(0, 2).map((pattern, i) => (
+            <div key={i} className="text-xs">
+              {pattern.name}: {(pattern.confidence * 100).toFixed(0)}%
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Risk Assessment */}
+      <div className="absolute top-20 right-4 z-10 bg-yellow-900/80 rounded-lg p-2 backdrop-blur-sm">
         <div className="flex items-center space-x-1 text-yellow-400 text-xs">
           <AlertTriangle className="h-4 w-4" />
           <span>Risk: {aiAnalysis.riskLevel.toUpperCase()}</span>
         </div>
       </div>
 
-      {/* Chart */}
+      {/* Advanced Prediction Chart */}
       <div style={{ height: `${height}px` }} className="bg-slate-900/50 rounded-lg p-4">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={predictionData} margin={{ top: 60, right: 30, left: 20, bottom: 5 }}>
+          <ComposedChart data={predictionData} margin={{ top: 80, right: 30, left: 20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
             <XAxis 
               dataKey="time" 
@@ -197,19 +216,37 @@ const PredictionChart: React.FC<PredictionChartProps> = ({
             <YAxis 
               stroke="#9CA3AF"
               fontSize={12}
-              domain={['dataMin - 0.002', 'dataMax + 0.002']}
-              tickFormatter={(value) => value.toFixed(5)}
+              domain={['dataMin - 0.003', 'dataMax + 0.003']}
+              tickFormatter={(value) => pair.includes('JPY') ? value.toFixed(3) : value.toFixed(5)}
             />
             <Tooltip content={<CustomTooltip />} />
+            
+            {/* Confidence Band */}
+            <Area
+              type="monotone"
+              dataKey="bullishScenario"
+              stackId="1"
+              stroke="none"
+              fill="url(#confidenceGradient)"
+              fillOpacity={0.2}
+            />
+            <Area
+              type="monotone"
+              dataKey="bearishScenario"
+              stackId="2"
+              stroke="none"
+              fill="url(#confidenceGradient)"
+              fillOpacity={0.2}
+            />
             
             {/* Historical Price Line */}
             <Line
               type="monotone"
-              dataKey="actualPrice"
+              dataKey="close"
               stroke="#3B82F6"
               strokeWidth={2}
               dot={false}
-              name="Actual Price"
+              name="Historical Price"
               connectNulls={false}
             />
             
@@ -219,69 +256,97 @@ const PredictionChart: React.FC<PredictionChartProps> = ({
               dataKey="aiPrediction"
               stroke="#8B5CF6"
               strokeWidth={3}
-              strokeDasharray="5 5"
+              strokeDasharray="8 4"
               dot={false}
               name="AI Prediction"
               connectNulls={false}
             />
             
-            {/* Bullish Scenario */}
+            {/* Support/Resistance Levels */}
             <Line
               type="monotone"
-              dataKey="bullishScenario"
+              dataKey="supportLevel"
               stroke="#10B981"
               strokeWidth={1}
               strokeDasharray="2 2"
               dot={false}
-              name="Bullish Scenario"
+              name="Support Level"
               connectNulls={false}
             />
-            
-            {/* Bearish Scenario */}
             <Line
               type="monotone"
-              dataKey="bearishScenario"
+              dataKey="resistanceLevel"
               stroke="#EF4444"
               strokeWidth={1}
               strokeDasharray="2 2"
               dot={false}
-              name="Bearish Scenario"
+              name="Resistance Level"
               connectNulls={false}
+            />
+            
+            {/* Volume Profile */}
+            <Bar
+              dataKey="volume"
+              fill="rgba(139, 92, 246, 0.3)"
+              yAxisId="volume"
             />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
 
-      {/* AI Analysis Panel */}
+      {/* Enhanced AI Analysis Panel */}
       <div className="absolute bottom-4 left-4 right-4 z-10">
-        <Card className="bg-slate-900/80 border-slate-600 backdrop-blur-sm">
-          <CardContent className="p-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+        <Card className="bg-slate-900/90 border-slate-600 backdrop-blur-sm">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
               <div>
-                <div className="text-slate-400 mb-1">Signal Strength</div>
+                <div className="text-slate-400 mb-2">ML Confidence</div>
                 <div className="flex items-center space-x-2">
-                  <div className="flex-1 bg-slate-700 rounded-full h-2">
+                  <div className="flex-1 bg-slate-700 rounded-full h-3">
                     <div 
-                      className="bg-purple-500 h-2 rounded-full"
-                      style={{ width: `${aiAnalysis.strength}%` }}
+                      className="bg-purple-500 h-3 rounded-full transition-all duration-1000"
+                      style={{ width: `${aiAnalysis.confidence * 100}%` }}
                     />
                   </div>
-                  <span className="text-white">{aiAnalysis.strength.toFixed(0)}%</span>
+                  <span className="text-white font-mono">{(aiAnalysis.confidence * 100).toFixed(0)}%</span>
                 </div>
               </div>
               
               <div>
-                <div className="text-slate-400 mb-1">Key Factors</div>
-                <div className="text-white text-xs">
-                  {aiAnalysis.keyFactors.slice(0, 2).join(', ')}
+                <div className="text-slate-400 mb-2">Detected Patterns</div>
+                <div className="text-white text-xs space-y-1">
+                  {patterns.slice(0, 2).map((pattern, i) => (
+                    <div key={i} className="flex justify-between">
+                      <span>{pattern.name}</span>
+                      <span className="text-purple-400">{(pattern.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                  ))}
                 </div>
               </div>
               
               <div>
-                <div className="text-slate-400 mb-1">Next Update</div>
-                <div className="text-white">
-                  {new Date(Date.now() + 300000).toLocaleTimeString()}
+                <div className="text-slate-400 mb-2">Probability</div>
+                <div className="text-white text-lg font-mono">
+                  {(mlPrediction?.probability * 100).toFixed(1)}%
                 </div>
+                <div className="text-xs text-slate-400">
+                  {aiAnalysis.direction.toUpperCase()} movement
+                </div>
+              </div>
+              
+              <div>
+                <div className="text-slate-400 mb-2">Next Analysis</div>
+                <div className="text-white text-sm">
+                  {new Date(Date.now() + 180000).toLocaleTimeString()}
+                </div>
+                <div className="text-xs text-slate-400">Auto-update in 3min</div>
+              </div>
+            </div>
+            
+            <div className="mt-4 pt-3 border-t border-slate-700">
+              <div className="text-slate-400 text-xs mb-2">Key ML Factors:</div>
+              <div className="text-white text-xs">
+                {aiAnalysis.keyFactors.join(' • ')}
               </div>
             </div>
           </CardContent>
