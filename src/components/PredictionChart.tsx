@@ -64,7 +64,6 @@ const PredictionChart: React.FC<PredictionChartProps> = ({
       
       combinedData.push({
         time: time.toLocaleTimeString(),
-        timestamp: time.getTime(),
         aiPrediction: aiPrice,
         bullishScenario: bullishPrice,
         bearishScenario: bearishPrice,

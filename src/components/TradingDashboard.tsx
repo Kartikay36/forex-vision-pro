@@ -1,14 +1,16 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Fullscreen, TrendingUp, TrendingDown, Clock, AlertCircle, Sun, Moon, Activity, Brain } from 'lucide-react';
+import { Fullscreen, TrendingUp, TrendingDown, Clock, AlertCircle, Sun, Moon, Activity, Brain, Maximize2 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import LiveChart from './LiveChart';
 import TradingViewChart from './TradingViewChart';
 import PredictionChart from './PredictionChart';
+import FullscreenPredictionChart from './FullscreenPredictionChart';
 import SignalPanel from './SignalPanel';
 import MarketStatus from './MarketStatus';
 import CurrencyPairSelector from './CurrencyPairSelector';
@@ -22,6 +24,7 @@ const TradingDashboard = () => {
   const [selectedPair, setSelectedPair] = useState('EUR/USD');
   const [selectedTimeframe, setSelectedTimeframe] = useState('1H');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showFullscreenPrediction, setShowFullscreenPrediction] = useState(false);
   const [currentTab, setCurrentTab] = useState('live');
   const { theme, toggleTheme } = useTheme();
 
@@ -49,6 +52,17 @@ const TradingDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white">
+      {/* Fullscreen Prediction Chart */}
+      {showFullscreenPrediction && (
+        <FullscreenPredictionChart
+          pair={selectedPair}
+          timeframe={selectedTimeframe}
+          tradingViewData={currentData}
+          historicalData={historicalData}
+          onClose={() => setShowFullscreenPrediction(false)}
+        />
+      )}
+
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-3">
@@ -118,10 +132,21 @@ const TradingDashboard = () => {
 
               <Card className="bg-slate-800/50 border-slate-700">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-white flex items-center space-x-2">
-                    <Brain className="h-5 w-5" />
-                    <span>AI Predictions</span>
-                    <Badge variant="secondary" className="text-xs">TradingView Data</Badge>
+                  <CardTitle className="text-white flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Brain className="h-5 w-5" />
+                      <span>AI Predictions</span>
+                      <Badge variant="secondary" className="text-xs">TradingView Data</Badge>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowFullscreenPrediction(true)}
+                      className="text-xs"
+                    >
+                      <Maximize2 className="h-4 w-4 mr-1" />
+                      Fullscreen
+                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
