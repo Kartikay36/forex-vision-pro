@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Fullscreen, TrendingUp, TrendingDown, Clock, AlertCircle, Sun, Moon, Activity, Brain } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import LiveChart from './LiveChart';
+import TradingViewChart from './TradingViewChart';
 import PredictionChart from './PredictionChart';
 import SignalPanel from './SignalPanel';
 import MarketStatus from './MarketStatus';
@@ -15,6 +15,7 @@ import CurrencyPairSelector from './CurrencyPairSelector';
 import TimeframeSelector from './TimeframeSelector';
 import TechnicalIndicators from './TechnicalIndicators';
 import { useForexData } from '@/hooks/useForexData';
+import { useTradingViewData } from '@/hooks/useTradingViewData';
 import { useMarketHours } from '@/hooks/useMarketHours';
 
 const TradingDashboard = () => {
@@ -24,7 +25,7 @@ const TradingDashboard = () => {
   const [currentTab, setCurrentTab] = useState('live');
   const { theme, toggleTheme } = useTheme();
 
-  const { forexData, isLoading, lastUpdate } = useForexData(selectedPair, selectedTimeframe);
+  const { currentData, historicalData, isLoading, lastUpdate, handleDataUpdate } = useTradingViewData(selectedPair, selectedTimeframe);
   const { isMarketOpen, nextMarketEvent, marketSessions } = useMarketHours();
 
   const toggleFullscreen = () => {
@@ -56,6 +57,9 @@ const TradingDashboard = () => {
               <h1 className="text-2xl font-bold text-foreground">Forex Trading Pro</h1>
               <Badge variant={isMarketOpen ? "default" : "secondary"} className="text-xs">
                 {isMarketOpen ? "Market Open" : "Market Closed"}
+              </Badge>
+              <Badge variant="outline" className="text-xs">
+                TradingView Integration
               </Badge>
             </div>
             <div className="flex items-center space-x-4">
@@ -91,23 +95,23 @@ const TradingDashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Main Chart Area */}
           <div className="lg:col-span-3 space-y-6">
-            {/* Controls */}
+            {/* Charts */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <Card className="bg-slate-800/50 border-slate-700">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-white flex items-center space-x-2">
                     <Activity className="h-5 w-5" />
-                    <span>Real-Time Chart</span>
-                    <Badge variant="outline" className="text-xs">Candlestick</Badge>
+                    <span>TradingView Live Chart</span>
+                    <Badge variant="outline" className="text-xs">Real-time</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <LiveChart
+                  <TradingViewChart
                     pair={selectedPair}
                     timeframe={selectedTimeframe}
-                    isLoading={false}
                     isMarketOpen={isMarketOpen}
                     height={400}
+                    onDataUpdate={handleDataUpdate}
                   />
                 </CardContent>
               </Card>
@@ -117,26 +121,29 @@ const TradingDashboard = () => {
                   <CardTitle className="text-white flex items-center space-x-2">
                     <Brain className="h-5 w-5" />
                     <span>AI Predictions</span>
-                    <Badge variant="secondary" className="text-xs">ML Enhanced</Badge>
+                    <Badge variant="secondary" className="text-xs">TradingView Data</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <PredictionChart
                     pair={selectedPair}
                     timeframe={selectedTimeframe}
-                    isLoading={false}
+                    isLoading={isLoading}
                     height={400}
+                    tradingViewData={currentData}
+                    historicalData={historicalData}
                   />
                 </CardContent>
               </Card>
             </div>
 
-            {/* Trading Signals - Horizontal Layout */}
+            {/* Trading Signals */}
             <SignalPanel
               pair={selectedPair}
               timeframe={selectedTimeframe}
-              data={forexData}
+              data={historicalData}
               isMarketOpen={isMarketOpen}
+              tradingViewData={currentData}
             />
 
             {/* Quick Stats */}
@@ -144,9 +151,14 @@ const TradingDashboard = () => {
               <Card className="bg-card border-border">
                 <CardContent className="p-4">
                   <div className="text-sm text-muted-foreground">24h Change</div>
-                  <div className="text-lg font-semibold text-green-500 flex items-center">
-                    <TrendingUp className="h-4 w-4 mr-1" />
-                    +0.34%
+                  <div className={`text-lg font-semibold flex items-center ${
+                    currentData?.changePercent && currentData.changePercent > 0 ? 'text-green-500' : 'text-red-500'
+                  }`}>
+                    {currentData?.changePercent && currentData.changePercent > 0 ? 
+                      <TrendingUp className="h-4 w-4 mr-1" /> : 
+                      <TrendingDown className="h-4 w-4 mr-1" />
+                    }
+                    {currentData?.changePercent?.toFixed(2) || '0.00'}%
                   </div>
                 </CardContent>
               </Card>
@@ -154,23 +166,33 @@ const TradingDashboard = () => {
               <Card className="bg-card border-border">
                 <CardContent className="p-4">
                   <div className="text-sm text-muted-foreground">24h High</div>
-                  <div className="text-lg font-semibold text-foreground">1.0892</div>
+                  <div className="text-lg font-semibold text-foreground">
+                    {currentData?.high24h ? 
+                      (selectedPair.includes('JPY') ? currentData.high24h.toFixed(3) : currentData.high24h.toFixed(5)) :
+                      '--'
+                    }
+                  </div>
                 </CardContent>
               </Card>
               
               <Card className="bg-card border-border">
                 <CardContent className="p-4">
                   <div className="text-sm text-muted-foreground">24h Low</div>
-                  <div className="text-lg font-semibold text-foreground">1.0845</div>
+                  <div className="text-lg font-semibold text-foreground">
+                    {currentData?.low24h ? 
+                      (selectedPair.includes('JPY') ? currentData.low24h.toFixed(3) : currentData.low24h.toFixed(5)) :
+                      '--'
+                    }
+                  </div>
                 </CardContent>
               </Card>
               
               <Card className="bg-card border-border">
                 <CardContent className="p-4">
-                  <div className="text-sm text-muted-foreground">Volatility</div>
+                  <div className="text-sm text-muted-foreground">Volume</div>
                   <div className="text-lg font-semibold text-yellow-500 flex items-center">
                     <AlertCircle className="h-4 w-4 mr-1" />
-                    Medium
+                    {currentData?.volume ? (currentData.volume / 1000000).toFixed(1) + 'M' : '--'}
                   </div>
                 </CardContent>
               </Card>
@@ -182,7 +204,7 @@ const TradingDashboard = () => {
             <CurrencyPairSelector
               selectedPair={selectedPair}
               onPairChange={setSelectedPair}
-              forexData={forexData}
+              tradingViewData={currentData}
             />
 
             <TimeframeSelector
@@ -191,9 +213,10 @@ const TradingDashboard = () => {
             />
 
             <TechnicalIndicators
-              data={forexData}
+              data={historicalData}
               pair={selectedPair}
               timeframe={selectedTimeframe}
+              tradingViewData={currentData}
             />
           </div>
         </div>
