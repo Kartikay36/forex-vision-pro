@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell } from 'recharts';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
@@ -41,38 +41,57 @@ const LiveChart: React.FC<LiveChartProps> = ({
     }
   }, [forexData]);
 
-  // Custom Candlestick Component
-  const Candlestick = (props: any) => {
+  // Custom Candlestick Component for Bar chart
+  const CandlestickBar = (props: any) => {
     const { payload, x, y, width, height } = props;
-    if (!payload) return null;
+    if (!payload || !payload.open || !payload.close || !payload.high || !payload.low) return null;
     
     const { open, high, low, close } = payload;
-    const isGreen = close > open;
+    const isGreen = close >= open;
     const color = isGreen ? '#10B981' : '#EF4444';
     
+    // Calculate positions
+    const maxPrice = Math.max(high, open, close, low);
+    const minPrice = Math.min(high, open, close, low);
+    const priceRange = maxPrice - minPrice;
+    
+    if (priceRange === 0) return null;
+    
+    const scale = height / priceRange;
+    
+    // Wick positions
+    const highY = y + (maxPrice - high) * scale;
+    const lowY = y + (maxPrice - low) * scale;
+    
+    // Body positions
+    const openY = y + (maxPrice - open) * scale;
+    const closeY = y + (maxPrice - close) * scale;
+    const bodyTop = Math.min(openY, closeY);
+    const bodyHeight = Math.abs(openY - closeY);
+    
     const candleX = x + width / 2;
-    const bodyHeight = Math.abs(close - open) * height / (payload.high - payload.low);
-    const bodyY = y + (Math.max(close, open) - payload.high) * height / (payload.high - payload.low);
+    const bodyWidth = Math.max(width * 0.6, 2);
     
     return (
       <g>
-        {/* Wick */}
+        {/* High-Low Wick */}
         <line
           x1={candleX}
-          y1={y}
+          y1={highY}
           x2={candleX}
-          y2={y + height}
+          y2={lowY}
           stroke={color}
           strokeWidth={1}
         />
-        {/* Body */}
+        {/* Candle Body */}
         <rect
-          x={candleX - width * 0.3}
-          y={bodyY}
-          width={width * 0.6}
-          height={bodyHeight}
-          fill={color}
+          x={candleX - bodyWidth / 2}
+          y={bodyTop}
+          width={bodyWidth}
+          height={Math.max(bodyHeight, 1)}
+          fill={isGreen ? color : 'none'}
           stroke={color}
+          strokeWidth={isGreen ? 0 : 1}
         />
       </g>
     );
@@ -195,13 +214,10 @@ const LiveChart: React.FC<LiveChartProps> = ({
               label="Support"
             />
             
-            {/* Candlestick representation using custom component */}
-            <Line
-              type="monotone"
-              dataKey="close"
-              stroke="transparent"
-              dot={false}
-              activeDot={false}
+            {/* Custom Candlesticks */}
+            <Bar
+              dataKey="high"
+              shape={<CandlestickBar />}
             />
           </ComposedChart>
         </ResponsiveContainer>

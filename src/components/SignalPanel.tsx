@@ -110,11 +110,11 @@ const SignalPanel: React.FC<SignalPanelProps> = ({
     return signal.timeframe === selectedTimeframe;
   });
 
-  const activeSignals = filteredSignals.filter(s => s.status === 'active');
-  const expiredSignals = filteredSignals.filter(s => s.status === 'expired');
+  const activeSignals = filteredSignals.filter(s => s.status === 'active').slice(0, 6);
+  const expiredSignals = filteredSignals.filter(s => s.status === 'expired').slice(0, 6);
 
   const SignalCard = ({ signal }: { signal: Signal }) => (
-    <Card className="bg-slate-800/50 border-slate-700 mb-3">
+    <Card className="bg-slate-800/50 border-slate-700 min-w-[300px]">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center space-x-2">
@@ -221,25 +221,25 @@ const SignalPanel: React.FC<SignalPanelProps> = ({
           </TabsList>
           
           <TabsContent value="active" className="mt-4">
-            <div className="max-h-96 overflow-y-auto space-y-2">
-              {activeSignals.length > 0 ? (
-                activeSignals.map(signal => (
+            {activeSignals.length > 0 ? (
+              <div className="flex gap-4 overflow-x-auto pb-4">
+                {activeSignals.map(signal => (
                   <SignalCard key={signal.id} signal={signal} />
-                ))
-              ) : (
-                <div className="flex items-center justify-center py-8 text-slate-400">
-                  <div className="text-center">
-                    <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-                    <div>No active signals</div>
-                    <div className="text-sm">Waiting for trading opportunities...</div>
-                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-8 text-slate-400">
+                <div className="text-center">
+                  <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+                  <div>No active signals</div>
+                  <div className="text-sm">Waiting for trading opportunities...</div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </TabsContent>
           
           <TabsContent value="expired" className="mt-4">
-            <div className="max-h-96 overflow-y-auto space-y-2">
+            <div className="flex gap-4 overflow-x-auto pb-4">
               {expiredSignals.map(signal => (
                 <SignalCard key={signal.id} signal={signal} />
               ))}

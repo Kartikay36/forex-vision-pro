@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -130,6 +131,14 @@ const TradingDashboard = () => {
               </Card>
             </div>
 
+            {/* Trading Signals - Horizontal Layout */}
+            <SignalPanel
+              pair={selectedPair}
+              timeframe={selectedTimeframe}
+              data={forexData}
+              isMarketOpen={isMarketOpen}
+            />
+
             {/* Quick Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
               <Card className="bg-card border-border">
@@ -170,6 +179,12 @@ const TradingDashboard = () => {
 
           {/* Right Sidebar - Controls & Analysis */}
           <div className="lg:col-span-1 space-y-4">
+            <CurrencyPairSelector
+              selectedPair={selectedPair}
+              onPairChange={setSelectedPair}
+              forexData={forexData}
+            />
+
             <TimeframeSelector
               selectedTimeframe={selectedTimeframe}
               onTimeframeChange={setSelectedTimeframe}
@@ -179,13 +194,6 @@ const TradingDashboard = () => {
               data={forexData}
               pair={selectedPair}
               timeframe={selectedTimeframe}
-            />
-
-            <SignalPanel
-              pair={selectedPair}
-              timeframe={selectedTimeframe}
-              data={forexData}
-              isMarketOpen={isMarketOpen}
             />
           </div>
         </div>
