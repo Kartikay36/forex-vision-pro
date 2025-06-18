@@ -2,10 +2,12 @@ import React, { useMemo } from 'react';
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Bar } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Brain, TrendingUp, TrendingDown, AlertTriangle, Target, BarChart } from 'lucide-react';
+import { Brain, TrendingUp, TrendingDown, AlertTriangle, Target, BarChart, Maximize2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { AIForecastEngine } from '@/utils/aiPredictionEngine';
 import { useRealForexData } from '@/hooks/useRealForexData';
 import { TradingViewData, CandlestickData } from '@/hooks/useTradingViewData';
+import FullscreenPredictionChart from './FullscreenPredictionChart';
 
 interface PredictionChartProps {
   pair: string;
@@ -25,6 +27,7 @@ const PredictionChart: React.FC<PredictionChartProps> = ({
   historicalData
 }) => {
   const { forexData } = useRealForexData(pair, timeframe);
+  const [showFullscreen, setShowFullscreen] = React.useState(false);
 
   const { predictionData, aiAnalysis, mlPrediction, patterns } = useMemo(() => {
     const dataToUse = historicalData.length > 0 ? historicalData : forexData;
@@ -37,7 +40,7 @@ const PredictionChart: React.FC<PredictionChartProps> = ({
     // Generate prediction timeline
     const historicalPoints = dataToUse.slice(-30);
     const predictionPoints = 20;
-    const combinedData = [...historicalPoints];
+    const combinedData: CandlestickData[] = [...historicalPoints];
     
     let currentPrice = tradingViewData?.price || dataToUse[dataToUse.length - 1].close;
     
@@ -64,20 +67,18 @@ const PredictionChart: React.FC<PredictionChartProps> = ({
       
       combinedData.push({
         time: time.toLocaleTimeString(),
+        open: aiPrice - volatility * 0.1,
+        high: aiPrice + volatility * 0.2,
+        low: aiPrice - volatility * 0.2,
+        close: aiPrice,
+        volume: 400000 + Math.random() * 600000,
         aiPrediction: aiPrice,
         bullishScenario: bullishPrice,
         bearishScenario: bearishPrice,
         confidenceBand: confidenceDecay,
         supportLevel,
         resistanceLevel,
-        type: 'prediction',
-        volume: 400000 + Math.random() * 600000,
-        
-        // Candlestick data for prediction
-        open: aiPrice - volatility * 0.1,
-        high: aiPrice + volatility * 0.2,
-        low: aiPrice - volatility * 0.2,
-        close: aiPrice
+        type: 'prediction'
       });
       
       currentPrice = aiPrice;
@@ -155,8 +156,32 @@ const PredictionChart: React.FC<PredictionChartProps> = ({
     );
   }
 
+  if (showFullscreen) {
+    return (
+      <FullscreenPredictionChart
+        pair={pair}
+        timeframe={timeframe}
+        tradingViewData={tradingViewData}
+        historicalData={predictionData}
+        onClose={() => setShowFullscreen(false)}
+      />
+    );
+  }
+
   return (
     <div className="relative">
+      {/* Fullscreen Toggle Button */}
+      <div className="absolute top-4 right-4 z-20">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowFullscreen(true)}
+          className="bg-slate-900/90 border-slate-600 hover:bg-slate-800"
+        >
+          <Maximize2 className="h-4 w-4" />
+        </Button>
+      </div>
+
       {/* Enhanced AI Analysis Header */}
       <div className="absolute top-4 left-4 z-10 bg-slate-900/90 rounded-lg p-3 backdrop-blur-sm border border-slate-600">
         <div className="flex items-center space-x-3">

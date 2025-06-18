@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 
 export interface TradingViewData {
@@ -19,6 +18,14 @@ export interface CandlestickData {
   low: number;
   close: number;
   volume: number;
+  // Prediction properties (optional)
+  aiPrediction?: number;
+  bullishScenario?: number;
+  bearishScenario?: number;
+  confidenceBand?: number;
+  supportLevel?: number;
+  resistanceLevel?: number;
+  type?: string;
 }
 
 // Global price state to ensure synchronization across components
