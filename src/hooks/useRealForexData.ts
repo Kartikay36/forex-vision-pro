@@ -9,6 +9,14 @@ interface CandlestickData {
   low: number;
   close: number;
   volume: number;
+  // Prediction properties
+  aiPrediction?: number;
+  bullishScenario?: number;
+  bearishScenario?: number;
+  confidenceBand?: number;
+  supportLevel?: number;
+  resistanceLevel?: number;
+  type?: string;
 }
 
 export const useRealForexData = (pair: string, timeframe: string) => {

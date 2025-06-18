@@ -165,6 +165,12 @@ const LiveChart: React.FC<LiveChartProps> = ({
               domain={['dataMin - 0.001', 'dataMax + 0.001']}
               tickFormatter={(value) => formatPrice(value)}
             />
+            <YAxis 
+              yAxisId="volume"
+              orientation="right"
+              stroke="hsl(var(--muted-foreground))"
+              fontSize={12}
+            />
             <Tooltip content={<CustomTooltip />} />
             
             {/* Volume bars */}

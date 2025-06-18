@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Bar } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -218,6 +217,12 @@ const PredictionChart: React.FC<PredictionChartProps> = ({
               fontSize={12}
               domain={['dataMin - 0.003', 'dataMax + 0.003']}
               tickFormatter={(value) => pair.includes('JPY') ? value.toFixed(3) : value.toFixed(5)}
+            />
+            <YAxis 
+              yAxisId="volume"
+              orientation="right"
+              stroke="#9CA3AF"
+              fontSize={12}
             />
             <Tooltip content={<CustomTooltip />} />
             

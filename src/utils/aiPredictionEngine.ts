@@ -53,7 +53,7 @@ export class AIForecastEngine {
       patterns.push({
         name: 'Head and Shoulders',
         confidence: headShoulders.confidence,
-        direction: 'bearish',
+        direction: 'bearish' as const,
         timeframe: '4H'
       });
     }
@@ -64,7 +64,7 @@ export class AIForecastEngine {
       patterns.push({
         name: doublePattern.type,
         confidence: doublePattern.confidence,
-        direction: doublePattern.direction,
+        direction: doublePattern.direction as 'bullish' | 'bearish',
         timeframe: '1H'
       });
     }
