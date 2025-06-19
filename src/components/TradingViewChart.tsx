@@ -20,7 +20,6 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   onDataUpdate 
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const widgetRef = useRef<any>(null);
   const [currentPrice, setCurrentPrice] = useState(0);
   const [priceChange, setPriceChange] = useState(0);
   const [trend, setTrend] = useState<'up' | 'down' | 'neutral'>('neutral');
@@ -127,7 +126,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     // Set widget as loaded after a delay
     const loadTimer = setTimeout(() => {
       setWidgetLoaded(true);
-    }, 2000);
+    }, 3000);
 
     // Update parent with latest data
     if (onDataUpdate && forexData.length > 0) {
@@ -197,7 +196,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       />
 
       {/* Loading State */}
-      {!widgetLoaded && (
+      {(!widgetLoaded || isLoading) && (
         <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg backdrop-blur-sm">
           <div className="text-center">
             <Activity className="h-8 w-8 animate-pulse mx-auto mb-2 text-primary" />
@@ -207,7 +206,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       )}
 
       {/* Market Status Overlay */}
-      {!isMarketOpen && widgetLoaded && (
+      {!isMarketOpen && widgetLoaded && !isLoading && (
         <div className="absolute inset-0 bg-background/60 flex items-center justify-center rounded-lg backdrop-blur-sm">
           <div className="text-center">
             <div className="text-foreground text-lg font-semibold mb-2">Market Closed</div>
@@ -218,11 +217,8 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
 
       {/* Error State */}
       {error && (
-        <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg backdrop-blur-sm">
-          <div className="text-center">
-            <div className="text-destructive text-lg font-semibold mb-2">Data Error</div>
-            <div className="text-muted-foreground">{error}</div>
-          </div>
+        <div className="absolute top-20 left-4 z-10 bg-yellow-500/20 rounded-lg p-2 backdrop-blur-sm border border-yellow-500/50">
+          <div className="text-yellow-200 text-sm">{error}</div>
         </div>
       )}
     </div>
