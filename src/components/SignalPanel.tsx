@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TrendingUp, TrendingDown, Clock, Target, AlertCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock, Target, AlertCircle, Activity } from 'lucide-react';
 import { TradingViewData, CandlestickData } from '@/hooks/useTradingViewData';
+import { AIForecastEngine } from '@/utils/aiPredictionEngine';
 
 interface SignalPanelProps {
   pair: string;
@@ -24,8 +26,11 @@ interface Signal {
   stopLoss: number;
   takeProfit: number;
   timestamp: Date;
+  expiryTimestamp: Date;
   reason: string;
   status: 'active' | 'expired' | 'hit';
+  duration: number; // in minutes
+  confidence: number;
 }
 
 const SignalPanel: React.FC<SignalPanelProps> = ({ 
@@ -41,79 +46,145 @@ const SignalPanel: React.FC<SignalPanelProps> = ({
   const timeframes = ['1M', '5M', '15M', '1H', '4H', '1D'];
   const majorPairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'USD/CHF'];
 
-  // Generate realistic trading signals based on TradingView data
-  useEffect(() => {
-    const generateSignals = () => {
-      const newSignals: Signal[] = [];
-      
-      majorPairs.forEach(currencyPair => {
-        timeframes.forEach(tf => {
-          // Generate 1-3 signals per pair per timeframe
-          const signalCount = Math.floor(Math.random() * 3) + 1;
+  // Generate realistic trading signals based on real-time AI analysis
+  const generateRealTimeSignals = useCallback(() => {
+    if (!tradingViewData || data.length === 0) return;
+
+    const newSignals: Signal[] = [];
+    
+    majorPairs.forEach(currencyPair => {
+      timeframes.forEach(tf => {
+        // Use AI engine for signal analysis
+        const aiEngine = new AIForecastEngine(currencyPair, data);
+        const prediction = aiEngine.generateMLPrediction(24);
+        const patterns = aiEngine.detectTechnicalPatterns();
+        
+        // Generate signals based on AI confidence and patterns
+        if (prediction.confidence > 0.6 && patterns.length > 0) {
+          const signalType = prediction.direction === 'up' ? 'BUY' : 'SELL';
           
-          for (let i = 0; i < signalCount; i++) {
-            const issBuy = Math.random() > 0.5;
-            
-            // Use TradingView data if available, otherwise use fallback
-            let basePrice: number;
-            if (tradingViewData && currencyPair === tradingViewData.symbol) {
-              basePrice = tradingViewData.price;
-            } else {
-              basePrice = currencyPair.includes('JPY') ? 150.25 : 1.0850;
-            }
-            
-            const priceVariation = currencyPair.includes('JPY') ? 0.1 : 0.0001;
-            
-            const entry = basePrice + (Math.random() - 0.5) * priceVariation * 100;
-            const stopLoss = issBuy ? 
-              entry - (Math.random() * 0.002 + 0.001) * basePrice :
-              entry + (Math.random() * 0.002 + 0.001) * basePrice;
-            const takeProfit = issBuy ?
-              entry + (Math.random() * 0.004 + 0.002) * basePrice :
-              entry - (Math.random() * 0.004 + 0.002) * basePrice;
-            
-            const signal: Signal = {
-              id: `${currencyPair}-${tf}-${i}-${Date.now()}`,
-              pair: currencyPair,
-              type: issBuy ? 'BUY' : 'SELL',
-              timeframe: tf,
-              strength: Math.floor(Math.random() * 40) + 60, // 60-100%
-              entry: entry,
-              stopLoss: stopLoss,
-              takeProfit: takeProfit,
-              timestamp: new Date(Date.now() - Math.random() * 3600000), // Within last hour
-              reason: [
-                'RSI oversold/overbought',
-                'MACD crossover',
-                'Support/Resistance break',
-                'Moving average convergence',
-                'Volume spike detected',
-                'Bollinger band squeeze'
-              ][Math.floor(Math.random() * 6)],
-              status: ['active', 'active', 'active', 'expired'][Math.floor(Math.random() * 4)] as 'active' | 'expired'
+          // Use real price from TradingView data if available
+          let basePrice: number;
+          if (tradingViewData && currencyPair === tradingViewData.symbol) {
+            basePrice = tradingViewData.price;
+          } else {
+            // Use realistic forex prices
+            const forexPrices: { [key: string]: number } = {
+              'EUR/USD': 1.1047,
+              'GBP/USD': 1.2701,
+              'USD/JPY': 149.85,
+              'AUD/USD': 0.6587,
+              'USD/CAD': 1.3612,
+              'USD/CHF': 0.8841
             };
-            
-            newSignals.push(signal);
+            basePrice = forexPrices[currencyPair] || 1.1047;
           }
-        });
+          
+          const isJPY = currencyPair.includes('JPY');
+          const priceVariation = isJPY ? 0.05 : 0.00005;
+          
+          const entry = basePrice + (Math.random() - 0.5) * priceVariation * 20;
+          const stopLoss = signalType === 'BUY' ? 
+            entry - (0.001 + Math.random() * 0.001) * basePrice :
+            entry + (0.001 + Math.random() * 0.001) * basePrice;
+          const takeProfit = signalType === 'BUY' ?
+            entry + (0.002 + Math.random() * 0.002) * basePrice :
+            entry - (0.002 + Math.random() * 0.002) * basePrice;
+          
+          // Calculate signal duration based on timeframe and confidence
+          let duration: number;
+          switch (tf) {
+            case '1M': duration = Math.floor(prediction.confidence * 5) + 2; break;
+            case '5M': duration = Math.floor(prediction.confidence * 15) + 5; break;
+            case '15M': duration = Math.floor(prediction.confidence * 30) + 10; break;
+            case '1H': duration = Math.floor(prediction.confidence * 120) + 30; break;
+            case '4H': duration = Math.floor(prediction.confidence * 480) + 120; break;
+            case '1D': duration = Math.floor(prediction.confidence * 1440) + 240; break;
+            default: duration = 60;
+          }
+          
+          const now = new Date();
+          const signal: Signal = {
+            id: `${currencyPair}-${tf}-${Date.now()}-${Math.random()}`,
+            pair: currencyPair,
+            type: signalType,
+            timeframe: tf,
+            strength: Math.floor(prediction.confidence * 100),
+            entry: entry,
+            stopLoss: stopLoss,
+            takeProfit: takeProfit,
+            timestamp: now,
+            expiryTimestamp: new Date(now.getTime() + duration * 60000),
+            reason: patterns.length > 0 ? 
+              `${patterns[0].name} + ML Confluence` : 
+              'ML Pattern Recognition',
+            status: 'active' as const,
+            duration: duration,
+            confidence: prediction.confidence
+          };
+          
+          newSignals.push(signal);
+        }
+      });
+    });
+    
+    // Update signals state, removing expired ones
+    setSignals(prevSignals => {
+      const now = new Date();
+      const validSignals = prevSignals.filter(signal => {
+        if (signal.expiryTimestamp > now) {
+          return true;
+        } else {
+          signal.status = 'expired';
+          return true; // Keep expired signals for display
+        }
       });
       
-      // Sort by timestamp (newest first)
-      newSignals.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-      setSignals(newSignals.slice(0, 50)); // Limit to 50 signals
-    };
+      // Add new signals, avoiding duplicates
+      const existingIds = new Set(validSignals.map(s => s.id));
+      const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
+      
+      const allSignals = [...validSignals, ...uniqueNewSignals];
+      
+      // Sort by timestamp (newest first) and limit
+      return allSignals
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+        .slice(0, 30);
+    });
+  }, [tradingViewData, data]);
 
-    generateSignals();
-    
-    // Update signals every 30 seconds if market is open
+  // Update signal status based on expiry time
+  useEffect(() => {
     const interval = setInterval(() => {
-      if (isMarketOpen) {
-        generateSignals();
-      }
-    }, 30000);
+      setSignals(prevSignals => 
+        prevSignals.map(signal => {
+          const now = new Date();
+          if (signal.status === 'active' && signal.expiryTimestamp <= now) {
+            return { ...signal, status: 'expired' as const };
+          }
+          return signal;
+        })
+      );
+    }, 1000); // Check every second
 
     return () => clearInterval(interval);
-  }, [isMarketOpen, tradingViewData]);
+  }, []);
+
+  // Generate signals on data change
+  useEffect(() => {
+    if (isMarketOpen && data.length > 10) {
+      generateRealTimeSignals();
+      
+      // Set up periodic signal generation
+      const interval = setInterval(() => {
+        if (isMarketOpen) {
+          generateRealTimeSignals();
+        }
+      }, 45000); // Generate new signals every 45 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [isMarketOpen, generateRealTimeSignals, data]);
 
   const filteredSignals = signals.filter(signal => {
     if (selectedTimeframe === 'ALL') return true;
@@ -123,75 +194,106 @@ const SignalPanel: React.FC<SignalPanelProps> = ({
   const activeSignals = filteredSignals.filter(s => s.status === 'active').slice(0, 6);
   const expiredSignals = filteredSignals.filter(s => s.status === 'expired').slice(0, 6);
 
-  const SignalCard = ({ signal }: { signal: Signal }) => (
-    <Card className="bg-slate-800/50 border-slate-700 min-w-[280px]">
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center space-x-2">
-            <Badge 
-              variant={signal.type === 'BUY' ? 'default' : 'destructive'}
-              className="text-xs"
-            >
-              {signal.type === 'BUY' ? (
-                <><TrendingUp className="h-3 w-3 mr-1" />{signal.type}</>
+  const SignalCard = ({ signal }: { signal: Signal }) => {
+    const timeRemaining = signal.status === 'active' ? 
+      Math.max(0, Math.floor((signal.expiryTimestamp.getTime() - Date.now()) / 1000 / 60)) : 0;
+    
+    return (
+      <Card className="bg-slate-800/50 border-slate-700 min-w-[300px]">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center space-x-2">
+              <Badge 
+                variant={signal.type === 'BUY' ? 'default' : 'destructive'}
+                className="text-xs"
+              >
+                {signal.type === 'BUY' ? (
+                  <><TrendingUp className="h-3 w-3 mr-1" />{signal.type}</>
+                ) : (
+                  <><TrendingDown className="h-3 w-3 mr-1" />{signal.type}</>
+                )}
+              </Badge>
+              <span className="text-white font-medium">{signal.pair}</span>
+              <Badge variant="outline" className="text-xs">
+                {signal.timeframe}
+              </Badge>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="text-sm text-slate-400">
+                {signal.strength}%
+              </div>
+              {signal.status === 'active' ? (
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               ) : (
-                <><TrendingDown className="h-3 w-3 mr-1" />{signal.type}</>
+                <div className="w-2 h-2 rounded-full bg-gray-500" />
               )}
-            </Badge>
-            <span className="text-white font-medium">{signal.pair}</span>
-            <Badge variant="outline" className="text-xs">
-              {signal.timeframe}
-            </Badge>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="text-sm text-slate-400">
-              {signal.strength}%
-            </div>
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-3 gap-2 text-sm mb-2">
-          <div>
-            <div className="text-slate-400">Entry</div>
-            <div className="text-white font-mono">
-              {signal.entry.toFixed(signal.pair.includes('JPY') ? 2 : 5)}
             </div>
           </div>
-          <div>
-            <div className="text-slate-400">S/L</div>
-            <div className="text-red-400 font-mono">
-              {signal.stopLoss.toFixed(signal.pair.includes('JPY') ? 2 : 5)}
+          
+          <div className="grid grid-cols-3 gap-2 text-sm mb-2">
+            <div>
+              <div className="text-slate-400">Entry</div>
+              <div className="text-white font-mono">
+                {signal.entry.toFixed(signal.pair.includes('JPY') ? 2 : 5)}
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-400">S/L</div>
+              <div className="text-red-400 font-mono">
+                {signal.stopLoss.toFixed(signal.pair.includes('JPY') ? 2 : 5)}
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-400">T/P</div>
+              <div className="text-green-400 font-mono">
+                {signal.takeProfit.toFixed(signal.pair.includes('JPY') ? 2 : 5)}
+              </div>
             </div>
           </div>
-          <div>
-            <div className="text-slate-400">T/P</div>
-            <div className="text-green-400 font-mono">
-              {signal.takeProfit.toFixed(signal.pair.includes('JPY') ? 2 : 5)}
+          
+          <div className="flex items-center justify-between text-xs mb-2">
+            <span className="text-slate-400">{signal.reason}</span>
+            <div className="flex items-center text-slate-400">
+              <Clock className="h-3 w-3 mr-1" />
+              {signal.timestamp.toLocaleTimeString()}
             </div>
           </div>
-        </div>
-        
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-slate-400">{signal.reason}</span>
-          <div className="flex items-center text-slate-400">
-            <Clock className="h-3 w-3 mr-1" />
-            {signal.timestamp.toLocaleTimeString()}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+          
+          {signal.status === 'active' && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-blue-400">Confidence: {(signal.confidence * 100).toFixed(0)}%</span>
+              <div className="flex items-center text-orange-400">
+                <Activity className="h-3 w-3 mr-1" />
+                <span>{timeRemaining}m remaining</span>
+              </div>
+            </div>
+          )}
+          
+          {signal.status === 'expired' && (
+            <div className="text-xs text-gray-500 flex items-center">
+              <Clock className="h-3 w-3 mr-1" />
+              <span>Expired</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <Card className="bg-slate-800/50 border-slate-700">
       <CardHeader className="pb-3">
         <CardTitle className="text-white flex items-center space-x-2">
           <Target className="h-5 w-5" />
-          <span>Trading Signals</span>
+          <span>AI Trading Signals</span>
           <Badge variant="secondary" className="text-xs">
             {activeSignals.length} Active
           </Badge>
+          {tradingViewData && (
+            <Badge variant="outline" className="text-xs">
+              Live Data
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       
@@ -242,7 +344,9 @@ const SignalPanel: React.FC<SignalPanelProps> = ({
                 <div className="text-center">
                   <AlertCircle className="h-8 w-8 mx-auto mb-2" />
                   <div>No active signals</div>
-                  <div className="text-sm">Waiting for trading opportunities...</div>
+                  <div className="text-sm">
+                    {isMarketOpen ? 'Analyzing market patterns...' : 'Market is closed'}
+                  </div>
                 </div>
               </div>
             )}
@@ -263,7 +367,7 @@ const SignalPanel: React.FC<SignalPanelProps> = ({
             <div className="text-center text-slate-400">
               <Clock className="h-6 w-6 mx-auto mb-2" />
               <div className="text-sm">Market Closed</div>
-              <div className="text-xs">Signals paused until market opens</div>
+              <div className="text-xs">Signal generation paused</div>
             </div>
           </div>
         )}
