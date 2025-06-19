@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
-import { useForexData } from 'src/hooks/useForexData';
+import { useForexData } from '@/hooks/useForexData';
 
 interface TradingViewChartProps {
   pair: string;

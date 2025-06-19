@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -18,7 +19,6 @@ import TechnicalIndicators from './TechnicalIndicators';
 import { useForexData } from '@/hooks/useForexData';
 import { useTradingViewData } from '@/hooks/useTradingViewData';
 import { useMarketHours } from '@/hooks/useMarketHours';
-import { generateAIAnalysis, generateMLPrediction, detectPatterns } from '@/utils/aiPredictionEngine';
 
 const TradingDashboard = () => {
   const [selectedPair, setSelectedPair] = useState('EUR/USD');
@@ -26,26 +26,36 @@ const TradingDashboard = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFullscreenPrediction, setShowFullscreenPrediction] = useState(false);
   const [currentTab, setCurrentTab] = useState('live');
-  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
-  const [mlPrediction, setMlPrediction] = useState<any>(null);
-  const [patterns, setPatterns] = useState<any[]>([]);
   const { theme, toggleTheme } = useTheme();
 
   const { currentData, historicalData, isLoading, lastUpdate, handleDataUpdate } = useTradingViewData(selectedPair, selectedTimeframe);
   const { isMarketOpen, nextMarketEvent, marketSessions } = useMarketHours();
 
-  // Generate AI analysis when data changes
-  useEffect(() => {
-    if (currentData && historicalData.length > 0) {
-      const analysis = generateAIAnalysis(historicalData, selectedPair, selectedTimeframe);
-      const prediction = generateMLPrediction(historicalData, selectedPair, selectedTimeframe);
-      const detectedPatterns = detectPatterns(historicalData);
-      
-      setAiAnalysis(analysis);
-      setMlPrediction(prediction);
-      setPatterns(detectedPatterns);
-    }
-  }, [currentData, historicalData, selectedPair, selectedTimeframe]);
+  // Generate simple AI analysis from the data we have
+  const generateSimpleAnalysis = () => {
+    if (!currentData || historicalData.length === 0) return null;
+    
+    return {
+      trend: currentData.changePercent > 0 ? 'bullish' : 'bearish',
+      strength: Math.abs(currentData.changePercent) > 0.5 ? 'strong' : 'weak',
+      support: Math.min(...historicalData.slice(-10).map(d => d.low)),
+      resistance: Math.max(...historicalData.slice(-10).map(d => d.high)),
+    };
+  };
+
+  const generateSimplePrediction = () => {
+    if (!currentData || historicalData.length === 0) return null;
+    
+    return {
+      direction: currentData.changePercent > 0 ? 'up' : 'down',
+      confidence: Math.min(Math.abs(currentData.changePercent) * 20, 85),
+      target: currentData.price * (1 + (currentData.changePercent > 0 ? 0.001 : -0.001)),
+    };
+  };
+
+  const aiAnalysis = generateSimpleAnalysis();
+  const mlPrediction = generateSimplePrediction();
+  const patterns = []; // Simple patterns array
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
