@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,6 +18,7 @@ import TechnicalIndicators from './TechnicalIndicators';
 import { useForexData } from '@/hooks/useForexData';
 import { useTradingViewData } from '@/hooks/useTradingViewData';
 import { useMarketHours } from '@/hooks/useMarketHours';
+import { generateAIAnalysis, generateMLPrediction, detectPatterns } from '@/utils/aiPredictionEngine';
 
 const TradingDashboard = () => {
   const [selectedPair, setSelectedPair] = useState('EUR/USD');
@@ -26,10 +26,26 @@ const TradingDashboard = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFullscreenPrediction, setShowFullscreenPrediction] = useState(false);
   const [currentTab, setCurrentTab] = useState('live');
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [mlPrediction, setMlPrediction] = useState<any>(null);
+  const [patterns, setPatterns] = useState<any[]>([]);
   const { theme, toggleTheme } = useTheme();
 
   const { currentData, historicalData, isLoading, lastUpdate, handleDataUpdate } = useTradingViewData(selectedPair, selectedTimeframe);
   const { isMarketOpen, nextMarketEvent, marketSessions } = useMarketHours();
+
+  // Generate AI analysis when data changes
+  useEffect(() => {
+    if (currentData && historicalData.length > 0) {
+      const analysis = generateAIAnalysis(historicalData, selectedPair, selectedTimeframe);
+      const prediction = generateMLPrediction(historicalData, selectedPair, selectedTimeframe);
+      const detectedPatterns = detectPatterns(historicalData);
+      
+      setAiAnalysis(analysis);
+      setMlPrediction(prediction);
+      setPatterns(detectedPatterns);
+    }
+  }, [currentData, historicalData, selectedPair, selectedTimeframe]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -53,12 +69,15 @@ const TradingDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white">
       {/* Fullscreen Prediction Chart */}
-      {showFullscreenPrediction && (
+      {showFullscreenPrediction && aiAnalysis && mlPrediction && (
         <FullscreenPredictionChart
           pair={selectedPair}
           timeframe={selectedTimeframe}
           tradingViewData={currentData}
           historicalData={historicalData}
+          aiAnalysis={aiAnalysis}
+          mlPrediction={mlPrediction}
+          patterns={patterns}
           onClose={() => setShowFullscreenPrediction(false)}
         />
       )}
@@ -143,6 +162,7 @@ const TradingDashboard = () => {
                       size="sm"
                       onClick={() => setShowFullscreenPrediction(true)}
                       className="text-xs"
+                      disabled={!aiAnalysis || !mlPrediction}
                     >
                       <Maximize2 className="h-4 w-4 mr-1" />
                       Fullscreen
