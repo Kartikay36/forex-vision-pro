@@ -1,13 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Fullscreen, TrendingUp, TrendingDown, Clock, AlertCircle, Sun, Moon, Activity, Brain, Maximize2 } from 'lucide-react';
+import { Fullscreen, TrendingUp, TrendingDown, Sun, Moon, Activity, Brain, Maximize2, Wifi } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-import LiveChart from './LiveChart';
 import TradingViewChart from './TradingViewChart';
 import PredictionChart from './PredictionChart';
 import FullscreenPredictionChart from './FullscreenPredictionChart';
@@ -16,8 +14,7 @@ import MarketStatus from './MarketStatus';
 import CurrencyPairSelector from './CurrencyPairSelector';
 import TimeframeSelector from './TimeframeSelector';
 import TechnicalIndicators from './TechnicalIndicators';
-import { useForexData } from '@/hooks/useForexData';
-import { useTradingViewData } from '@/hooks/useTradingViewData';
+import { useRealTimeForex } from '@/hooks/useRealTimeForex';
 import { useMarketHours } from '@/hooks/useMarketHours';
 
 const TradingDashboard = () => {
@@ -25,37 +22,36 @@ const TradingDashboard = () => {
   const [selectedTimeframe, setSelectedTimeframe] = useState('1H');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFullscreenPrediction, setShowFullscreenPrediction] = useState(false);
-  const [currentTab, setCurrentTab] = useState('live');
   const { theme, toggleTheme } = useTheme();
 
-  const { currentData, historicalData, isLoading, lastUpdate, handleDataUpdate } = useTradingViewData(selectedPair, selectedTimeframe);
+  const { realTimeData, forexData, isLoading, error, connectionStatus } = useRealTimeForex(selectedPair, selectedTimeframe);
   const { isMarketOpen, nextMarketEvent, marketSessions } = useMarketHours();
 
   // Generate simple AI analysis from the data we have
   const generateSimpleAnalysis = () => {
-    if (!currentData || historicalData.length === 0) return null;
+    if (!realTimeData || forexData.length === 0) return null;
     
     return {
-      trend: currentData.changePercent > 0 ? 'bullish' : 'bearish',
-      strength: Math.abs(currentData.changePercent) > 0.5 ? 'strong' : 'weak',
-      support: Math.min(...historicalData.slice(-10).map(d => d.low)),
-      resistance: Math.max(...historicalData.slice(-10).map(d => d.high)),
+      trend: realTimeData.changePercent > 0 ? 'bullish' : 'bearish',
+      strength: Math.abs(realTimeData.changePercent) > 0.5 ? 'strong' : 'weak',
+      support: Math.min(...forexData.slice(-10).map(d => d.low)),
+      resistance: Math.max(...forexData.slice(-10).map(d => d.high)),
     };
   };
 
   const generateSimplePrediction = () => {
-    if (!currentData || historicalData.length === 0) return null;
+    if (!realTimeData || forexData.length === 0) return null;
     
     return {
-      direction: currentData.changePercent > 0 ? 'up' : 'down',
-      confidence: Math.min(Math.abs(currentData.changePercent) * 20, 85),
-      target: currentData.price * (1 + (currentData.changePercent > 0 ? 0.001 : -0.001)),
+      direction: realTimeData.changePercent > 0 ? 'up' : 'down',
+      confidence: Math.min(Math.abs(realTimeData.changePercent) * 20, 85),
+      target: realTimeData.price * (1 + (realTimeData.changePercent > 0 ? 0.001 : -0.001)),
     };
   };
 
   const aiAnalysis = generateSimpleAnalysis();
   const mlPrediction = generateSimplePrediction();
-  const patterns = []; // Simple patterns array
+  const patterns = [];
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -83,8 +79,8 @@ const TradingDashboard = () => {
         <FullscreenPredictionChart
           pair={selectedPair}
           timeframe={selectedTimeframe}
-          tradingViewData={currentData}
-          historicalData={historicalData}
+          tradingViewData={realTimeData}
+          historicalData={forexData}
           aiAnalysis={aiAnalysis}
           mlPrediction={mlPrediction}
           patterns={patterns}
@@ -101,8 +97,12 @@ const TradingDashboard = () => {
               <Badge variant={isMarketOpen ? "default" : "secondary"} className="text-xs">
                 {isMarketOpen ? "Market Open" : "Market Closed"}
               </Badge>
-              <Badge variant="outline" className="text-xs">
-                TradingView Integration
+              <Badge 
+                variant={connectionStatus === 'connected' ? "default" : "outline"} 
+                className="text-xs flex items-center"
+              >
+                <Wifi className="h-3 w-3 mr-1" />
+                Real-time Data
               </Badge>
             </div>
             <div className="flex items-center space-x-4">
@@ -154,7 +154,6 @@ const TradingDashboard = () => {
                     timeframe={selectedTimeframe}
                     isMarketOpen={isMarketOpen}
                     height={400}
-                    onDataUpdate={handleDataUpdate}
                   />
                 </CardContent>
               </Card>
@@ -165,7 +164,7 @@ const TradingDashboard = () => {
                     <div className="flex items-center space-x-2">
                       <Brain className="h-5 w-5" />
                       <span>AI Predictions</span>
-                      <Badge variant="secondary" className="text-xs">TradingView Data</Badge>
+                      <Badge variant="secondary" className="text-xs">Live Data</Badge>
                     </div>
                     <Button
                       variant="outline"
@@ -185,8 +184,8 @@ const TradingDashboard = () => {
                     timeframe={selectedTimeframe}
                     isLoading={isLoading}
                     height={400}
-                    tradingViewData={currentData}
-                    historicalData={historicalData}
+                    tradingViewData={realTimeData}
+                    historicalData={forexData}
                   />
                 </CardContent>
               </Card>
@@ -196,9 +195,9 @@ const TradingDashboard = () => {
             <SignalPanel
               pair={selectedPair}
               timeframe={selectedTimeframe}
-              data={historicalData}
+              data={forexData}
               isMarketOpen={isMarketOpen}
-              tradingViewData={currentData}
+              tradingViewData={realTimeData}
             />
 
             {/* Quick Stats */}
@@ -207,13 +206,13 @@ const TradingDashboard = () => {
                 <CardContent className="p-4">
                   <div className="text-sm text-muted-foreground">24h Change</div>
                   <div className={`text-lg font-semibold flex items-center ${
-                    currentData?.changePercent && currentData.changePercent > 0 ? 'text-green-500' : 'text-red-500'
+                    realTimeData?.changePercent && realTimeData.changePercent > 0 ? 'text-green-500' : 'text-red-500'
                   }`}>
-                    {currentData?.changePercent && currentData.changePercent > 0 ? 
+                    {realTimeData?.changePercent && realTimeData.changePercent > 0 ? 
                       <TrendingUp className="h-4 w-4 mr-1" /> : 
                       <TrendingDown className="h-4 w-4 mr-1" />
                     }
-                    {currentData?.changePercent?.toFixed(2) || '0.00'}%
+                    {realTimeData?.changePercent?.toFixed(2) || '0.00'}%
                   </div>
                 </CardContent>
               </Card>
@@ -222,8 +221,8 @@ const TradingDashboard = () => {
                 <CardContent className="p-4">
                   <div className="text-sm text-muted-foreground">24h High</div>
                   <div className="text-lg font-semibold text-foreground">
-                    {currentData?.high24h ? 
-                      (selectedPair.includes('JPY') ? currentData.high24h.toFixed(3) : currentData.high24h.toFixed(5)) :
+                    {realTimeData?.high ? 
+                      (selectedPair.includes('JPY') ? realTimeData.high.toFixed(3) : realTimeData.high.toFixed(5)) :
                       '--'
                     }
                   </div>
@@ -234,8 +233,8 @@ const TradingDashboard = () => {
                 <CardContent className="p-4">
                   <div className="text-sm text-muted-foreground">24h Low</div>
                   <div className="text-lg font-semibold text-foreground">
-                    {currentData?.low24h ? 
-                      (selectedPair.includes('JPY') ? currentData.low24h.toFixed(3) : currentData.low24h.toFixed(5)) :
+                    {realTimeData?.low ? 
+                      (selectedPair.includes('JPY') ? realTimeData.low.toFixed(3) : realTimeData.low.toFixed(5)) :
                       '--'
                     }
                   </div>
@@ -244,10 +243,14 @@ const TradingDashboard = () => {
               
               <Card className="bg-card border-border">
                 <CardContent className="p-4">
-                  <div className="text-sm text-muted-foreground">Volume</div>
-                  <div className="text-lg font-semibold text-yellow-500 flex items-center">
-                    <AlertCircle className="h-4 w-4 mr-1" />
-                    {currentData?.volume ? (currentData.volume / 1000000).toFixed(1) + 'M' : '--'}
+                  <div className="text-sm text-muted-foreground">Spread</div>
+                  <div className="text-lg font-semibold text-yellow-500">
+                    {realTimeData?.ask && realTimeData?.bid ? 
+                      (selectedPair.includes('JPY') ? 
+                        (realTimeData.ask - realTimeData.bid).toFixed(3) : 
+                        (realTimeData.ask - realTimeData.bid).toFixed(5)
+                      ) : '--'
+                    }
                   </div>
                 </CardContent>
               </Card>
@@ -259,7 +262,7 @@ const TradingDashboard = () => {
             <CurrencyPairSelector
               selectedPair={selectedPair}
               onPairChange={setSelectedPair}
-              tradingViewData={currentData}
+              tradingViewData={realTimeData}
             />
 
             <TimeframeSelector
@@ -268,10 +271,10 @@ const TradingDashboard = () => {
             />
 
             <TechnicalIndicators
-              data={historicalData}
+              data={forexData}
               pair={selectedPair}
               timeframe={selectedTimeframe}
-              tradingViewData={currentData}
+              tradingViewData={realTimeData}
             />
           </div>
         </div>

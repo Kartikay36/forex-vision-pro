@@ -1,8 +1,8 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
-import { useForexData } from '@/hooks/useForexData';
+import { TrendingUp, TrendingDown, Activity, Wifi, WifiOff } from 'lucide-react';
+import { useRealTimeForex } from '@/hooks/useRealTimeForex';
 
 interface TradingViewChartProps {
   pair: string;
@@ -25,7 +25,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   const [trend, setTrend] = useState<'up' | 'down' | 'neutral'>('neutral');
   const [widgetLoaded, setWidgetLoaded] = useState(false);
 
-  const { realTimeData, forexData, isLoading, error } = useForexData(pair, timeframe);
+  const { realTimeData, forexData, isLoading, error, connectionStatus } = useRealTimeForex(pair, timeframe);
 
   // Convert our pair format to TradingView FX_IDC format
   const getTradingViewSymbol = (pair: string) => {
@@ -63,9 +63,9 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   // Update price and trend when realTimeData changes
   useEffect(() => {
     if (realTimeData) {
-      setCurrentPrice(realTimeData.currentPrice);
-      setPriceChange(realTimeData.priceChange);
-      setTrend(realTimeData.priceChange > 0 ? 'up' : realTimeData.priceChange < 0 ? 'down' : 'neutral');
+      setCurrentPrice(realTimeData.price);
+      setPriceChange(realTimeData.change);
+      setTrend(realTimeData.change > 0 ? 'up' : realTimeData.change < 0 ? 'down' : 'neutral');
     }
   }, [realTimeData]);
 
@@ -77,12 +77,11 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     containerRef.current.innerHTML = '';
     setWidgetLoaded(false);
 
-    // Create container div for the widget first
+    // Create widget container
     const widgetContainer = document.createElement('div');
-    widgetContainer.id = `tradingview_widget_${Date.now()}`;
+    widgetContainer.id = `tradingview_${Date.now()}`;
     widgetContainer.style.height = '100%';
     widgetContainer.style.width = '100%';
-    widgetContainer.style.position = 'relative';
     
     containerRef.current.appendChild(widgetContainer);
 
@@ -98,7 +97,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       interval: getTradingViewInterval(timeframe),
       timezone: "Etc/UTC",
       theme: "dark",
-      style: "1", // Candlestick
+      style: "1",
       locale: "en",
       enable_publishing: false,
       allow_symbol_change: false,
@@ -110,12 +109,9 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       save_image: false,
       studies: [
         "RSI@tv-basicstudies",
-        "MACD@tv-basicstudies",
-        "BB@tv-basicstudies"
+        "MACD@tv-basicstudies"
       ],
       show_popup_button: false,
-      popup_width: "1000",
-      popup_height: "650",
       width: "100%",
       height: "100%"
     };
@@ -123,7 +119,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     script.innerHTML = JSON.stringify(config);
     containerRef.current.appendChild(script);
 
-    // Set widget as loaded after a delay
+    // Set widget as loaded after delay
     const loadTimer = setTimeout(() => {
       setWidgetLoaded(true);
     }, 3000);
@@ -133,26 +129,21 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       const latestData = forexData[forexData.length - 1];
       onDataUpdate({
         ...latestData,
-        currentPrice: realTimeData?.currentPrice || latestData.close,
-        priceChange: realTimeData?.priceChange || 0
+        currentPrice: realTimeData?.price || latestData.close,
+        priceChange: realTimeData?.change || 0
       });
     }
 
     return () => {
       clearTimeout(loadTimer);
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
-      }
     };
-  }, [pair, timeframe]);
+  }, [pair, timeframe, height]);
 
   const formatPrice = (price: number) => {
-    // JPY pairs need 3 decimals, others need 5
     return pair.includes('JPY') ? price.toFixed(3) : price.toFixed(5);
   };
 
   const formatChange = (change: number) => {
-    // Format change with proper decimal places
     return (change > 0 ? '+' : '') + formatPrice(change);
   };
 
@@ -181,8 +172,15 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
             >
               {isMarketOpen ? "LIVE" : "CLOSED"}
             </Badge>
-            <Badge variant="outline" className="text-xs">
-              TradingView
+            <Badge 
+              variant={connectionStatus === 'connected' ? "default" : "outline"} 
+              className="text-xs flex items-center"
+            >
+              {connectionStatus === 'connected' ? 
+                <Wifi className="h-3 w-3 mr-1" /> : 
+                <WifiOff className="h-3 w-3 mr-1" />
+              }
+              {connectionStatus.toUpperCase()}
             </Badge>
           </div>
         </div>
@@ -200,8 +198,18 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg backdrop-blur-sm">
           <div className="text-center">
             <Activity className="h-8 w-8 animate-pulse mx-auto mb-2 text-primary" />
-            <div className="text-foreground text-lg font-semibold">Loading TradingView chart...</div>
+            <div className="text-foreground text-lg font-semibold">Loading Live Chart...</div>
+            <div className="text-sm text-muted-foreground mt-1">
+              Connection: {connectionStatus}
+            </div>
           </div>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="absolute top-16 left-4 z-10 bg-yellow-500/20 rounded-lg p-2 backdrop-blur-sm border border-yellow-500/50">
+          <div className="text-yellow-200 text-sm">{error}</div>
         </div>
       )}
 
@@ -210,15 +218,8 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         <div className="absolute inset-0 bg-background/60 flex items-center justify-center rounded-lg backdrop-blur-sm">
           <div className="text-center">
             <div className="text-foreground text-lg font-semibold mb-2">Market Closed</div>
-            <div className="text-muted-foreground">Chart will resume when market opens</div>
+            <div className="text-muted-foreground">Showing simulated live data</div>
           </div>
-        </div>
-      )}
-
-      {/* Error State */}
-      {error && (
-        <div className="absolute top-20 left-4 z-10 bg-yellow-500/20 rounded-lg p-2 backdrop-blur-sm border border-yellow-500/50">
-          <div className="text-yellow-200 text-sm">{error}</div>
         </div>
       )}
     </div>
