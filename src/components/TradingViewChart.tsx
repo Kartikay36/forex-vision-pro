@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
+import { useForexData } from 'src/hooks/useForexData';
 
 interface TradingViewChartProps {
   pair: string;
@@ -24,19 +24,26 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   const [priceChange, setPriceChange] = useState(0);
   const [trend, setTrend] = useState<'up' | 'down' | 'neutral'>('neutral');
 
+  const { realTimeData, forexData, isLoading, error } = useForexData(pair, timeframe);
+
   // Convert our pair format to TradingView Forex.com format
   const getTradingViewSymbol = (pair: string) => {
     const symbols: { [key: string]: string } = {
-      'EUR/USD': 'FOREX:EURUSD',
-      'GBP/USD': 'FOREX:GBPUSD', 
-      'USD/JPY': 'FOREX:USDJPY',
-      'AUD/USD': 'FOREX:AUDUSD',
-      'USD/CAD': 'FOREX:USDCAD',
-      'USD/CHF': 'FOREX:USDCHF',
-      'NZD/USD': 'FOREX:NZDUSD',
-      'EUR/GBP': 'FOREX:EURGBP'
+      'EUR/USD': 'FX_IDC:EURUSD',
+      'GBP/USD': 'FX_IDC:GBPUSD', 
+      'USD/JPY': 'FX_IDC:USDJPY',
+      'AUD/USD': 'FX_IDC:AUDUSD',
+      'USD/CAD': 'FX_IDC:USDCAD',
+      'USD/CHF': 'FX_IDC:USDCHF',
+      'NZD/USD': 'FX_IDC:NZDUSD',
+      'EUR/GBP': 'FX_IDC:EURGBP',
+      'EUR/JPY': 'FX_IDC:EURJPY',
+      'GBP/JPY': 'FX_IDC:GBPJPY',
+      'AUD/JPY': 'FX_IDC:AUDJPY',
+      'EUR/CAD': 'FX_IDC:EURCAD',
+      'GBP/CAD': 'FX_IDC:GBPCAD',
     };
-    return symbols[pair] || 'FOREX:EURUSD';
+    return symbols[pair] || 'ICE:EURUSD';
   };
 
   // Convert timeframe to TradingView format
@@ -52,13 +59,21 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     return intervals[timeframe] || '60';
   };
 
+  // Update price and trend when realTimeData changes
   useEffect(() => {
-    if (!containerRef.current) return;
-
-    // Clear existing widget
-    if (containerRef.current) {
-      containerRef.current.innerHTML = '';
+    if (realTimeData) {
+      setCurrentPrice(realTimeData.currentPrice);
+      setPriceChange(realTimeData.priceChange);
+      setTrend(realTimeData.priceChange > 0 ? 'up' : realTimeData.priceChange < 0 ? 'down' : 'neutral');
     }
+  }, [realTimeData]);
+
+  // Initialize TradingView widget
+  useEffect(() => {
+    if (!containerRef.current || isLoading) return;
+    
+    // Clear existing widget
+    containerRef.current.innerHTML = '';
 
     // Create TradingView widget script
     const script = document.createElement('script');
@@ -79,7 +94,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       calendar: false,
       support_host: "https://www.tradingview.com",
       container_id: "tradingview_widget",
-      hide_top_toolbar: false,
+      hide_top_toolbar: true, // Hide TradingView header
       hide_legend: false,
       save_image: false,
       studies: [
@@ -103,56 +118,31 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     containerRef.current.appendChild(widgetContainer);
     containerRef.current.appendChild(script);
 
-    // Use Forex.com accurate pricing data for simulation
-    const simulateForexComData = () => {
-      const forexComPrices: { [key: string]: number } = {
-        'EUR/USD': 1.1047,  // Real Forex.com market prices
-        'GBP/USD': 1.2701,
-        'USD/JPY': 149.85,
-        'AUD/USD': 0.6587,
-        'USD/CAD': 1.3612,
-        'USD/CHF': 0.8841,
-        'NZD/USD': 0.6123,
-        'EUR/GBP': 0.8695
-      };
-      
-      const basePrice = forexComPrices[pair] || 1.1047;
-      const price = basePrice + (Math.random() - 0.5) * 0.0005; // Reduced volatility for accuracy
-      const change = (Math.random() - 0.5) * 0.001;
-      
-      setCurrentPrice(price);
-      setPriceChange(change);
-      setTrend(change > 0 ? 'up' : change < 0 ? 'down' : 'neutral');
-
-      // Simulate accurate candlestick data for Forex.com
-      const candlestickData = {
-        time: new Date().toISOString(),
-        open: price - 0.00005,
-        high: price + 0.0001,
-        low: price - 0.0001,
-        close: price,
-        volume: Math.floor(Math.random() * 800000) + 500000
-      };
-
-      if (onDataUpdate) {
-        onDataUpdate(candlestickData);
-      }
-    };
-
-    // Update data every 3 seconds for real-time accuracy
-    const interval = setInterval(simulateForexComData, 3000);
-    simulateForexComData(); // Initial call
+    // Update parent with latest data
+    if (onDataUpdate && forexData.length > 0) {
+      const latestData = forexData[forexData.length - 1];
+      onDataUpdate({
+        ...latestData,
+        currentPrice: realTimeData?.currentPrice || latestData.close,
+        priceChange: realTimeData?.priceChange || 0
+      });
+    }
 
     return () => {
-      clearInterval(interval);
       if (containerRef.current) {
         containerRef.current.innerHTML = '';
       }
     };
-  }, [pair, timeframe, height]);
+  }, [pair, timeframe, height, forexData, isLoading]);
 
   const formatPrice = (price: number) => {
+    // JPY pairs need 3 decimals, others need 5
     return pair.includes('JPY') ? price.toFixed(3) : price.toFixed(5);
+  };
+
+  const formatChange = (change: number) => {
+    // Format change with proper decimal places
+    return (change > 0 ? '+' : '') + formatPrice(change);
   };
 
   return (
@@ -170,7 +160,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
             }`}>
               {trend === 'up' ? <TrendingUp className="h-4 w-4 mr-1" /> : 
                trend === 'down' ? <TrendingDown className="h-4 w-4 mr-1" /> : null}
-              {priceChange > 0 ? '+' : ''}{formatPrice(priceChange)}
+              {formatChange(priceChange)}
             </div>
           </div>
           <div className="flex flex-col space-y-1">
@@ -200,6 +190,26 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
           <div className="text-center">
             <div className="text-foreground text-lg font-semibold mb-2">Market Closed</div>
             <div className="text-muted-foreground">Chart will resume when market opens</div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg backdrop-blur-sm">
+          <div className="text-center">
+            <Activity className="h-8 w-8 animate-pulse mx-auto mb-2 text-primary" />
+            <div className="text-foreground text-lg font-semibold">Loading market data...</div>
+          </div>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg backdrop-blur-sm">
+          <div className="text-center">
+            <div className="text-destructive text-lg font-semibold mb-2">Data Error</div>
+            <div className="text-muted-foreground">{error}</div>
           </div>
         </div>
       )}
