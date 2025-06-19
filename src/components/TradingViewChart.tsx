@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
@@ -23,10 +24,11 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   const [currentPrice, setCurrentPrice] = useState(0);
   const [priceChange, setPriceChange] = useState(0);
   const [trend, setTrend] = useState<'up' | 'down' | 'neutral'>('neutral');
+  const [widgetLoaded, setWidgetLoaded] = useState(false);
 
   const { realTimeData, forexData, isLoading, error } = useForexData(pair, timeframe);
 
-  // Convert our pair format to TradingView Forex.com format
+  // Convert our pair format to TradingView FX_IDC format
   const getTradingViewSymbol = (pair: string) => {
     const symbols: { [key: string]: string } = {
       'EUR/USD': 'FX_IDC:EURUSD',
@@ -43,7 +45,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       'EUR/CAD': 'FX_IDC:EURCAD',
       'GBP/CAD': 'FX_IDC:GBPCAD',
     };
-    return symbols[pair] || 'ICE:EURUSD';
+    return symbols[pair] || 'FX_IDC:EURUSD';
   };
 
   // Convert timeframe to TradingView format
@@ -70,10 +72,20 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
 
   // Initialize TradingView widget
   useEffect(() => {
-    if (!containerRef.current || isLoading) return;
+    if (!containerRef.current) return;
     
     // Clear existing widget
     containerRef.current.innerHTML = '';
+    setWidgetLoaded(false);
+
+    // Create container div for the widget first
+    const widgetContainer = document.createElement('div');
+    widgetContainer.id = `tradingview_widget_${Date.now()}`;
+    widgetContainer.style.height = '100%';
+    widgetContainer.style.width = '100%';
+    widgetContainer.style.position = 'relative';
+    
+    containerRef.current.appendChild(widgetContainer);
 
     // Create TradingView widget script
     const script = document.createElement('script');
@@ -93,8 +105,8 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       allow_symbol_change: false,
       calendar: false,
       support_host: "https://www.tradingview.com",
-      container_id: "tradingview_widget",
-      hide_top_toolbar: true, // Hide TradingView header
+      container_id: widgetContainer.id,
+      hide_top_toolbar: false,
       hide_legend: false,
       save_image: false,
       studies: [
@@ -102,21 +114,20 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         "MACD@tv-basicstudies",
         "BB@tv-basicstudies"
       ],
-      show_popup_button: true,
+      show_popup_button: false,
       popup_width: "1000",
-      popup_height: "650"
+      popup_height: "650",
+      width: "100%",
+      height: "100%"
     };
 
     script.innerHTML = JSON.stringify(config);
-
-    // Create container div for the widget
-    const widgetContainer = document.createElement('div');
-    widgetContainer.id = 'tradingview_widget';
-    widgetContainer.style.height = `${height - 60}px`;
-    widgetContainer.style.width = '100%';
-
-    containerRef.current.appendChild(widgetContainer);
     containerRef.current.appendChild(script);
+
+    // Set widget as loaded after a delay
+    const loadTimer = setTimeout(() => {
+      setWidgetLoaded(true);
+    }, 2000);
 
     // Update parent with latest data
     if (onDataUpdate && forexData.length > 0) {
@@ -129,11 +140,12 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     }
 
     return () => {
+      clearTimeout(loadTimer);
       if (containerRef.current) {
         containerRef.current.innerHTML = '';
       }
     };
-  }, [pair, timeframe, height, forexData, isLoading]);
+  }, [pair, timeframe]);
 
   const formatPrice = (price: number) => {
     // JPY pairs need 3 decimals, others need 5
@@ -146,7 +158,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   };
 
   return (
-    <div className="relative">
+    <div className="relative w-full" style={{ height: `${height}px` }}>
       {/* Real-time Price Header */}
       <div className="absolute top-4 left-4 z-10 bg-background/90 rounded-lg p-3 backdrop-blur-sm border border-border">
         <div className="flex items-center space-x-3">
@@ -180,26 +192,26 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       {/* TradingView Widget Container */}
       <div 
         ref={containerRef}
+        className="w-full h-full bg-slate-900 rounded-lg overflow-hidden"
         style={{ height: `${height}px` }}
-        className="bg-slate-900 rounded-lg overflow-hidden"
       />
 
-      {/* Market Status Overlay */}
-      {!isMarketOpen && (
+      {/* Loading State */}
+      {!widgetLoaded && (
         <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg backdrop-blur-sm">
           <div className="text-center">
-            <div className="text-foreground text-lg font-semibold mb-2">Market Closed</div>
-            <div className="text-muted-foreground">Chart will resume when market opens</div>
+            <Activity className="h-8 w-8 animate-pulse mx-auto mb-2 text-primary" />
+            <div className="text-foreground text-lg font-semibold">Loading TradingView chart...</div>
           </div>
         </div>
       )}
 
-      {/* Loading State */}
-      {isLoading && (
-        <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg backdrop-blur-sm">
+      {/* Market Status Overlay */}
+      {!isMarketOpen && widgetLoaded && (
+        <div className="absolute inset-0 bg-background/60 flex items-center justify-center rounded-lg backdrop-blur-sm">
           <div className="text-center">
-            <Activity className="h-8 w-8 animate-pulse mx-auto mb-2 text-primary" />
-            <div className="text-foreground text-lg font-semibold">Loading market data...</div>
+            <div className="text-foreground text-lg font-semibold mb-2">Market Closed</div>
+            <div className="text-muted-foreground">Chart will resume when market opens</div>
           </div>
         </div>
       )}
