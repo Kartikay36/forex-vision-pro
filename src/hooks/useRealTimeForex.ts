@@ -10,6 +10,9 @@ interface RealTimeForexData {
   ask: number;
   high: number;
   low: number;
+  volume: number;
+  high24h: number;
+  low24h: number;
   timestamp: number;
 }
 
@@ -47,6 +50,8 @@ export const useRealTimeForex = (pair: string, timeframe: string) => {
   const wsRef = useRef<WebSocket | null>(null);
   const intervalRef = useRef<NodeJS.Timeout>();
   const priceHistoryRef = useRef<number[]>([]);
+  const dailyHighRef = useRef<number>(0);
+  const dailyLowRef = useRef<number>(Infinity);
 
   // Base prices for different currency pairs
   const getBasePrice = useCallback((pair: string): number => {
@@ -84,6 +89,14 @@ export const useRealTimeForex = (pair: string, timeframe: string) => {
       priceHistoryRef.current.shift();
     }
     
+    // Update daily high/low
+    if (currentPrice > dailyHighRef.current) {
+      dailyHighRef.current = currentPrice;
+    }
+    if (currentPrice < dailyLowRef.current) {
+      dailyLowRef.current = currentPrice;
+    }
+    
     const previousPrice = priceHistoryRef.current[priceHistoryRef.current.length - 2] || basePrice;
     const change = currentPrice - previousPrice;
     const changePercent = (change / previousPrice) * 100;
@@ -97,6 +110,9 @@ export const useRealTimeForex = (pair: string, timeframe: string) => {
       ask: currentPrice + spread / 2,
       high: Math.max(...priceHistoryRef.current.slice(-20)) || currentPrice,
       low: Math.min(...priceHistoryRef.current.slice(-20)) || currentPrice,
+      volume: Math.floor(Math.random() * 1000000) + 500000,
+      high24h: dailyHighRef.current || currentPrice,
+      low24h: dailyLowRef.current === Infinity ? currentPrice : dailyLowRef.current,
       timestamp: now
     };
   }, [pair]);
@@ -112,15 +128,28 @@ export const useRealTimeForex = (pair: string, timeframe: string) => {
         const data = await response.json();
         if (data.status && data.response && data.response.length > 0) {
           const rate = data.response[0];
+          const price = parseFloat(rate.price);
+          
+          // Update daily high/low
+          if (price > dailyHighRef.current) {
+            dailyHighRef.current = price;
+          }
+          if (price < dailyLowRef.current) {
+            dailyLowRef.current = price;
+          }
+          
           return {
             symbol: pair,
-            price: parseFloat(rate.price),
+            price,
             change: parseFloat(rate.change) || 0,
             changePercent: parseFloat(rate.change_percent) || 0,
-            bid: parseFloat(rate.price) - 0.0001,
-            ask: parseFloat(rate.price) + 0.0001,
-            high: parseFloat(rate.high) || parseFloat(rate.price),
-            low: parseFloat(rate.low) || parseFloat(rate.price),
+            bid: price - 0.0001,
+            ask: price + 0.0001,
+            high: parseFloat(rate.high) || price,
+            low: parseFloat(rate.low) || price,
+            volume: Math.floor(Math.random() * 1000000) + 500000,
+            high24h: dailyHighRef.current || price,
+            low24h: dailyLowRef.current === Infinity ? price : dailyLowRef.current,
             timestamp: Date.now()
           };
         }
@@ -136,6 +165,15 @@ export const useRealTimeForex = (pair: string, timeframe: string) => {
         const data = await response.json();
         if (data.rates && data.rates[toCurrency]) {
           const rate = data.rates[toCurrency];
+          
+          // Update daily high/low
+          if (rate > dailyHighRef.current) {
+            dailyHighRef.current = rate;
+          }
+          if (rate < dailyLowRef.current) {
+            dailyLowRef.current = rate;
+          }
+          
           return {
             symbol: pair,
             price: rate,
@@ -145,6 +183,9 @@ export const useRealTimeForex = (pair: string, timeframe: string) => {
             ask: rate + 0.0001,
             high: rate,
             low: rate,
+            volume: Math.floor(Math.random() * 1000000) + 500000,
+            high24h: dailyHighRef.current || rate,
+            low24h: dailyLowRef.current === Infinity ? rate : dailyLowRef.current,
             timestamp: Date.now()
           };
         }
