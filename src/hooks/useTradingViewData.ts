@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 export interface TradingViewData {
   symbol: string;
@@ -9,178 +9,256 @@ export interface TradingViewData {
   high24h: number;
   low24h: number;
   timestamp: number;
+  bid?: number;
+  ask?: number;
 }
 
 export interface CandlestickData {
   time: string;
+  timestamp: number;
   open: number;
   high: number;
   low: number;
   close: number;
   volume: number;
-  // Prediction properties (optional)
-  aiPrediction?: number;
-  bullishScenario?: number;
-  bearishScenario?: number;
-  confidenceBand?: number;
-  supportLevel?: number;
-  resistanceLevel?: number;
-  type?: string;
 }
 
 // Global price state to ensure synchronization across components
 const globalPriceState: { [key: string]: TradingViewData } = {};
+
+// Get your free API key from https://finnhub.io/
+const FINNHUB_API_KEY = 'd19daj9r01qmm7tufo8gd19daj9r01qmm7tufo90';
 
 export const useTradingViewData = (pair: string, timeframe: string) => {
   const [currentData, setCurrentData] = useState<TradingViewData | null>(null);
   const [historicalData, setHistoricalData] = useState<CandlestickData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [error, setError] = useState<string | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
+  const prevPriceRef = useRef<number | null>(null);
 
-  // Real Forex.com market prices (updated periodically from actual market data)
-  const getForexComPrice = useCallback((symbol: string) => {
-    const forexComPrices: { [key: string]: number } = {
-      'EUR/USD': 1.1047,  // Real Forex.com market prices
-      'GBP/USD': 1.2701,
-      'USD/JPY': 149.85,
-      'AUD/USD': 0.6587,
-      'USD/CAD': 1.3612,
-      'USD/CHF': 0.8841,
-      'NZD/USD': 0.6123,
-      'EUR/GBP': 0.8695
-    };
-    return forexComPrices[symbol] || 1.1047;
+  // Convert pair to FOREX.com format (EUR/USD -> FOREX:EURUSD)
+  const formatPair = useCallback((pair: string) => {
+    return `FOREX:${pair.replace('/', '')}`;
   }, []);
 
-  // Generate realistic Forex.com market data synchronized across all components
-  const generateSynchronizedForexData = useCallback((symbol: string) => {
-    const basePrice = getForexComPrice(symbol);
-    
-    // Use existing global price or create new one based on Forex.com data
-    let currentPrice: number;
-    if (globalPriceState[symbol]) {
-      // Slight variation from last known price for realistic movement
-      const variation = (Math.random() - 0.5) * 0.00005; // Reduced for Forex.com accuracy
-      currentPrice = globalPriceState[symbol].price + variation;
-    } else {
-      currentPrice = basePrice;
+  // Convert timeframe to Finnhub resolution
+  const getResolution = useCallback((timeframe: string) => {
+    switch (timeframe) {
+      case '1M': return '1';
+      case '5M': return '5';
+      case '15M': return '15';
+      case '1H': return '60';
+      case '4H': return '240';
+      case '1D': return 'D';
+      default: return 'D';
     }
-    
-    // Calculate realistic daily change
-    const dailyChange = currentPrice - basePrice;
-    const changePercent = (dailyChange / basePrice) * 100;
-    
-    const newData: TradingViewData = {
-      symbol,
-      price: currentPrice,
-      change: dailyChange,
-      changePercent,
-      volume: Math.floor(Math.random() * 2500000) + 1500000, // Forex.com volume range
-      high24h: currentPrice * (1 + Math.random() * 0.003),
-      low24h: currentPrice * (1 - Math.random() * 0.003),
-      timestamp: Date.now()
-    };
-    
-    // Update global state
-    globalPriceState[symbol] = newData;
-    
-    return newData;
-  }, [getForexComPrice]);
+  }, []);
 
-  // Generate historical candlestick data based on Forex.com pricing
-  const generateHistoricalForexData = useCallback((symbol: string, timeframe: string) => {
-    const data: CandlestickData[] = [];
-    const basePrice = getForexComPrice(symbol);
-    const volatility = symbol.includes('JPY') ? 0.03 : 0.00003; // Reduced volatility for accuracy
-    
-    let currentPrice = basePrice * 0.9995; // Start very close to current Forex.com price
-    const periods = 100;
-    
-    for (let i = periods; i >= 0; i--) {
-      const timeMultiplier = timeframe === '1M' ? 60000 : 
-                           timeframe === '5M' ? 300000 :
-                           timeframe === '15M' ? 900000 :
-                           timeframe === '1H' ? 3600000 :
-                           timeframe === '4H' ? 14400000 : 86400000;
+  // Fetch historical data
+  const fetchHistoricalData = useCallback(async (symbol: string, resolution: string) => {
+    try {
+      // Calculate time range based on timeframe
+      const to = Math.floor(Date.now() / 1000);
+      let from = to;
       
-      const timestamp = new Date(Date.now() - i * timeMultiplier);
+      switch (timeframe) {
+        case '1M':
+        case '5M':
+        case '15M':
+          from = to - 24 * 60 * 60; // 1 day
+          break;
+        case '1H':
+        case '4H':
+          from = to - 7 * 24 * 60 * 60; // 1 week
+          break;
+        case '1D':
+          from = to - 30 * 24 * 60 * 60; // 1 month
+          break;
+        default:
+          from = to - 30 * 24 * 60 * 60; // 1 month
+      }
       
-      // Generate realistic OHLC with trending toward current Forex.com price
-      const trendAdjustment = (basePrice - currentPrice) / periods * (periods - i) * 0.05;
-      const open = currentPrice + trendAdjustment;
+      const response = await fetch(
+        `https://finnhub.io/api/v1/forex/candle?symbol=${symbol}&resolution=${resolution}&from=${from}&to=${to}&token=${FINNHUB_API_KEY}`
+      );
       
-      const changeRange = volatility * (0.3 + Math.random() * 0.4);
-      const high = open + changeRange * Math.random();
-      const low = open - changeRange * Math.random();
-      const close = low + (high - low) * Math.random();
+      if (!response.ok) throw new Error('Failed to fetch historical data');
       
-      data.push({
-        time: timestamp.toLocaleTimeString(),
-        open,
-        high,
-        low,
-        close,
-        volume: Math.floor(Math.random() * 1200000) + 600000
-      });
+      const data = await response.json();
       
-      currentPrice = close + (Math.random() - 0.5) * volatility * 0.05;
+      if (data.s !== 'ok' || !data.t || data.t.length === 0) {
+        throw new Error('Invalid historical data');
+      }
+      
+      return data.t.map((timestamp: number, i: number) => ({
+        time: new Date(timestamp * 1000).toISOString(),
+        timestamp: timestamp * 1000,
+        open: data.o[i],
+        high: data.h[i],
+        low: data.l[i],
+        close: data.c[i],
+        volume: data.v ? data.v[i] : 0
+      }));
+    } catch (err) {
+      console.error('Finnhub historical data error:', err);
+      throw err;
+    }
+  }, [timeframe]);
+
+  // Initialize WebSocket for real-time updates
+  const initWebSocket = useCallback((symbol: string) => {
+    if (socketRef.current) {
+      socketRef.current.close();
     }
     
-    return data;
-  }, [getForexComPrice]);
+    const socket = new WebSocket(`wss://ws.finnhub.io?token=${FINNHUB_API_KEY}`);
+    socketRef.current = socket;
+    
+    socket.addEventListener('open', () => {
+      socket.send(JSON.stringify({ type: 'subscribe', symbol }));
+    });
+    
+    socket.addEventListener('message', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'trade' && data.data) {
+          const trade = data.data[0];
+          if (trade && trade.s === symbol) {
+            const currentPrice = trade.p;
+            const priceChange = prevPriceRef.current 
+              ? currentPrice - prevPriceRef.current
+              : 0;
+            const priceChangePercent = prevPriceRef.current 
+              ? (priceChange / prevPriceRef.current) * 100
+              : 0;
+            
+            const newData: TradingViewData = {
+              symbol: pair,
+              price: currentPrice,
+              change: priceChange,
+              changePercent: priceChangePercent,
+              volume: trade.v || 0,
+              high24h: Math.max(currentData?.high24h || 0, currentPrice),
+              low24h: Math.min(currentData?.low24h || Infinity, currentPrice),
+              timestamp: Date.now()
+            };
+            
+            // Update global state
+            globalPriceState[pair] = newData;
+            setCurrentData(newData);
+            setLastUpdate(new Date());
+            
+            prevPriceRef.current = currentPrice;
+          }
+        }
+      } catch (err) {
+        console.error('WebSocket message error:', err);
+      }
+    });
+    
+    socket.addEventListener('error', (error) => {
+      console.error('WebSocket error:', error);
+      setError('Realtime connection error');
+    });
+    
+    return socket;
+  }, [currentData, pair]);
 
   // Handle data update from TradingView widget
   const handleDataUpdate = useCallback((newData: CandlestickData) => {
     setHistoricalData(prev => {
       const updated = [...prev];
-      updated.push(newData);
+      updated.push({
+        ...newData,
+        timestamp: Date.now()
+      });
       return updated.slice(-100);
     });
     
     // Update current data to match the candlestick
+    const prevClose = prevPriceRef.current || newData.open;
+    const change = newData.close - prevClose;
+    const changePercent = (change / prevClose) * 100;
+    
     const updatedCurrentData: TradingViewData = {
       symbol: pair,
       price: newData.close,
-      change: newData.close - newData.open,
-      changePercent: ((newData.close - newData.open) / newData.open) * 100,
+      change,
+      changePercent,
       volume: newData.volume,
-      high24h: newData.high,
-      low24h: newData.low,
+      high24h: Math.max(currentData?.high24h || 0, newData.high),
+      low24h: Math.min(currentData?.low24h || Infinity, newData.low),
       timestamp: Date.now()
     };
     
     globalPriceState[pair] = updatedCurrentData;
     setCurrentData(updatedCurrentData);
     setLastUpdate(new Date());
-  }, [pair]);
+    prevPriceRef.current = newData.close;
+  }, [currentData, pair]);
 
+  // Initialize data
   useEffect(() => {
-    setIsLoading(true);
-    
-    // Initialize with synchronized Forex.com market data
-    const initialData = generateSynchronizedForexData(pair);
-    setCurrentData(initialData);
-    
-    const historical = generateHistoricalForexData(pair, timeframe);
-    setHistoricalData(historical);
-    
-    setIsLoading(false);
-    
-    // Update data every 2 seconds for better real-time accuracy with Forex.com
-    const interval = setInterval(() => {
-      const newData = generateSynchronizedForexData(pair);
-      setCurrentData(newData);
-      setLastUpdate(new Date());
-    }, 2000);
-    
-    return () => clearInterval(interval);
-  }, [pair, timeframe, generateSynchronizedForexData, generateHistoricalForexData]);
+    const initializeData = async () => {
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        const symbol = formatPair(pair);
+        const resolution = getResolution(timeframe);
+        
+        // Fetch historical data
+        const historical = await fetchHistoricalData(symbol, resolution);
+        setHistoricalData(historical);
+        
+        // Initialize with last historical price
+        if (historical.length > 0) {
+          const last = historical[historical.length - 1];
+          prevPriceRef.current = last.close;
+          
+          const initialData: TradingViewData = {
+            symbol: pair,
+            price: last.close,
+            change: 0,
+            changePercent: 0,
+            volume: last.volume,
+            high24h: Math.max(...historical.map(h => h.high)),
+            low24h: Math.min(...historical.map(h => h.low)),
+            timestamp: Date.now()
+          };
+          
+          globalPriceState[pair] = initialData;
+          setCurrentData(initialData);
+        }
+        
+        // Initialize WebSocket for real-time updates
+        initWebSocket(symbol);
+        
+      } catch (err) {
+        setError('Failed to initialize data');
+        console.error('Data initialization error:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeData();
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.close();
+      }
+    };
+  }, [pair, timeframe, formatPair, getResolution, fetchHistoricalData, initWebSocket]);
 
   return {
     currentData,
     historicalData,
     isLoading,
     lastUpdate,
+    error,
     handleDataUpdate
   };
 };
